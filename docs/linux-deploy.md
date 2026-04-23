@@ -49,6 +49,8 @@ python3 -m pip install --upgrade pip setuptools wheel
 pip install -r /opt/swp-rag-workbench/current/backend/requirements.txt
 ```
 
+`backend/requirements.txt` 已固定 Rerank 兼容版本，避免 `FlagEmbedding` 与 `transformers` 新版本不兼容导致重排失效。
+
 ## 5. 下载 Rerank 模型
 
 ```bash
@@ -222,4 +224,27 @@ npm ci || npm install
 npm run build
 sudo systemctl restart swp-rag-backend
 sudo systemctl reload nginx
+```
+
+## 14. 排查 Rerank
+
+如果前端显示“重排不可用”，先检查后端诊断接口：
+
+```bash
+curl http://127.0.0.1:8000/api/rerank/status
+```
+
+再查看日志：
+
+```bash
+journalctl -u swp-rag-backend -f
+```
+
+如果是依赖版本漂移，重新安装固定版本：
+
+```bash
+source /opt/swp-rag-workbench/venv/bin/activate
+pip uninstall -y FlagEmbedding transformers tokenizers
+pip install --no-cache-dir -r /opt/swp-rag-workbench/current/backend/requirements.txt
+sudo systemctl restart swp-rag-backend
 ```

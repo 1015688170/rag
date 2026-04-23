@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,7 +24,13 @@ class RerankService:
         try:
             reranker = self._get_reranker()
             pairs = [[query, doc["content"]] for doc in docs]
-            scores = reranker.compute_score(pairs)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="`max_length` is ignored when `padding`=`True` and there is no truncation strategy.*",
+                    category=UserWarning,
+                )
+                scores = reranker.compute_score(pairs)
             if isinstance(scores, float):
                 scores = [scores]
 

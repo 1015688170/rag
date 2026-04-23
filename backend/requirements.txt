@@ -4,6 +4,8 @@ pydantic-settings
 requests
 azure-search-documents
 azure-core
-FlagEmbedding
+FlagEmbedding==1.3.2
+transformers==4.44.2
+tokenizers<0.20
 boto3
 google-genai
