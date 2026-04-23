@@ -66,7 +66,7 @@ VITE_API_BASE_URL=/api
 
 ```bash
 cd /opt/swp-rag-workbench/current/frontend
-npm install
+npm ci || npm install
 npm run build
 ```
 

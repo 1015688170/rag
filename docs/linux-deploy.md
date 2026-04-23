@@ -154,7 +154,7 @@ journalctl -u swp-rag-backend -f
 
 ```bash
 cd /opt/swp-rag-workbench/current/frontend
-npm install
+npm ci || npm install
 npm run build
 ```
 
@@ -218,7 +218,7 @@ git pull
 source /opt/swp-rag-workbench/venv/bin/activate
 pip install -r backend/requirements.txt
 cd frontend
-npm install
+npm ci || npm install
 npm run build
 sudo systemctl restart swp-rag-backend
 sudo systemctl reload nginx
