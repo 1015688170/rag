@@ -8,7 +8,7 @@ interface ComposerProps {
 export function Composer(props: ComposerProps) {
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <div className="rounded-[24px] border border-line bg-white/90 p-3 shadow-panel backdrop-blur focus-within:border-brand-500">
+      <div className="rounded-[28px] border border-line bg-white/95 p-3 shadow-panel backdrop-blur">
         <textarea
           rows={3}
           value={props.value}
@@ -19,10 +19,10 @@ export function Composer(props: ComposerProps) {
               props.onSubmit();
             }
           }}
-          placeholder="输入你的 RAG 测试问题。支持 Ctrl/Cmd + Enter 快速发送。"
-          className="max-h-40 min-h-20 w-full resize-none border-none bg-transparent px-2 py-1 text-sm leading-7 text-ink outline-none placeholder:text-slate-400"
+          placeholder="有问题，尽管问"
+          className="h-28 w-full resize-none border-none bg-transparent px-3 py-2 text-sm leading-7 text-ink outline-none placeholder:text-slate-400"
         />
-        <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-100 pt-3">
+        <div className="flex items-center justify-between gap-4 border-t border-slate-100 px-2 pt-3">
           <p className="text-xs text-slate-500">按当前左侧参数发送到 `/api/chat`</p>
           <button
             type="button"
