@@ -139,12 +139,12 @@ function App() {
           onPromptTemplateReset={() => setPromptTemplate(DEFAULT_PROMPT_TEMPLATE)}
         />
 
-        <main className="flex min-h-[calc(100vh-3rem)] flex-col">
+        <main className="flex h-[calc(100vh-3rem)] min-h-0 flex-col">
           <section
             className={
               hasConversation
-                ? "rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur"
-                : "flex flex-1 items-center justify-center"
+                ? "flex min-h-0 flex-1 flex-col rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur"
+                : "flex min-h-0 flex-1 items-center justify-center"
             }
           >
             {hasConversation ? (
@@ -159,7 +159,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex max-h-[calc(100vh-18rem)] flex-col gap-4 overflow-y-auto pr-1">
+                <div className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
                   {messages.map((message) => (
                     <MessageBubble key={message.id} message={message} />
                   ))}
@@ -170,7 +170,7 @@ function App() {
             )}
           </section>
 
-          <div className="mt-5">
+          <div className="mt-5 shrink-0">
             <Composer value={draft} isLoading={isLoading} onChange={setDraft} onSubmit={handleSubmit} />
           </div>
         </main>
