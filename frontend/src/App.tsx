@@ -7,12 +7,13 @@ import { createId } from "./lib/id";
 import { sendChatMessage } from "./lib/api";
 import type { ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
 
-const initialMessages: ChatMessage[] = [
-  {
-    id: "welcome",
-    role: "system",
-    content: "欢迎来到 RAG 测试台。左侧切换 Embedding 和 LLM，右侧直接提问，回复下方会展示 Sources 面板方便做检索溯源。",
-  },
+const initialMessages: ChatMessage[] = [];
+
+const exampleQuestions = [
+  "如何判断 Kubernetes Pod 是否发生 OOM？",
+  "GitLab CI 扫描发现 HIGH 漏洞后应该怎么处理？",
+  "请给我一份生产故障排查 SOP",
+  "哪些日志或命令可以辅助定位问题？",
 ];
 
 const DEFAULT_PROMPT_TEMPLATE = `你是一个严谨的 RAG 问答助手。
@@ -31,6 +32,26 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function EmptyConversation({ onPickQuestion }: { onPickQuestion: (question: string) => void }) {
+  return (
+    <div className="flex min-h-[42vh] flex-col items-center justify-center px-6 py-12 text-center">
+      <p className="font-display text-3xl font-semibold text-ink">今天想测试什么？</p>
+      <div className="mt-8 grid w-full max-w-3xl gap-3 sm:grid-cols-2">
+        {exampleQuestions.map((question) => (
+          <button
+            key={question}
+            type="button"
+            onClick={() => onPickQuestion(question)}
+            className="rounded-2xl border border-line bg-white/80 px-4 py-3 text-left text-sm leading-6 text-slate-700 shadow-sm transition hover:border-brand-500 hover:bg-white hover:text-ink"
+          >
+            {question}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [embeddingModel, setEmbeddingModel] = useState<EmbeddingModel>("ada-002");
   const [chatModel, setChatModel] = useState<ChatModel>("claude-opus-4.5");
@@ -40,6 +61,7 @@ function App() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
+  const hasConversation = messages.length > 0;
 
   async function handleSubmit() {
     const question = draft.trim();
@@ -117,26 +139,40 @@ function App() {
           onPromptTemplateReset={() => setPromptTemplate(DEFAULT_PROMPT_TEMPLATE)}
         />
 
-        <main className="flex flex-col gap-5">
-          <section className="rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Conversation</p>
-                <h2 className="mt-2 font-display text-2xl font-semibold text-ink">对话交互区</h2>
-              </div>
-              <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-medium text-slate-600">
-                {isLoading ? "RAG pipeline running" : "Ready"}
-              </div>
-            </div>
+        <main className="flex min-h-[calc(100vh-3rem)] flex-col">
+          <section
+            className={
+              hasConversation
+                ? "rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur"
+                : "flex flex-1 items-center justify-center"
+            }
+          >
+            {hasConversation ? (
+              <>
+                <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Conversation</p>
+                    <h2 className="mt-2 font-display text-2xl font-semibold text-ink">对话交互区</h2>
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-medium text-slate-600">
+                    {isLoading ? "RAG pipeline running" : "Ready"}
+                  </div>
+                </div>
 
-            <div className="mt-5 flex max-h-[calc(100vh-18rem)] flex-col gap-4 overflow-y-auto pr-1">
-              {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
-            </div>
+                <div className="mt-5 flex max-h-[calc(100vh-18rem)] flex-col gap-4 overflow-y-auto pr-1">
+                  {messages.map((message) => (
+                    <MessageBubble key={message.id} message={message} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <EmptyConversation onPickQuestion={setDraft} />
+            )}
           </section>
 
-          <Composer value={draft} isLoading={isLoading} onChange={setDraft} onSubmit={handleSubmit} />
+          <div className="mt-5">
+            <Composer value={draft} isLoading={isLoading} onChange={setDraft} onSubmit={handleSubmit} />
+          </div>
         </main>
       </div>
     </div>
