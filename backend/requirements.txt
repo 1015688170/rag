@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+requests
+azure-search-documents
+azure-core
+FlagEmbedding
+boto3
+google-genai
