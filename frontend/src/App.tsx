@@ -117,8 +117,8 @@ function App() {
           onPromptTemplateReset={() => setPromptTemplate(DEFAULT_PROMPT_TEMPLATE)}
         />
 
-        <main className="flex min-h-[calc(100vh-3rem)] flex-col gap-5">
-          <section className="flex-1 rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur">
+        <main className="flex flex-col gap-5">
+          <section className="rounded-[28px] border border-white/70 bg-white/65 p-5 shadow-panel backdrop-blur">
             <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Conversation</p>
