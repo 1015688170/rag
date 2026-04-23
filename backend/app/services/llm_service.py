@@ -85,10 +85,9 @@ class LLMService:
         if self._claude_client is not None:
             return self._claude_client
 
-        if self.settings.aws_bearer_token_bedrock:
-            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = self.settings.aws_bearer_token_bedrock
-        elif self.settings.nexus_api_key:
-            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = self.settings.nexus_api_key
+        bearer_token = self.settings.nexus_api_key.strip() or self.settings.aws_bearer_token_bedrock.strip()
+        if bearer_token:
+            os.environ["AWS_BEARER_TOKEN_BEDROCK"] = bearer_token
 
         import boto3
 
