@@ -6,6 +6,10 @@ interface SourcesPanelProps {
   sources: SourceItem[];
 }
 
+function formatScore(score?: number | null): string {
+  return typeof score === "number" ? score.toFixed(4) : "N/A";
+}
+
 export function SourcesPanel({ sources }: SourcesPanelProps) {
   const [open, setOpen] = useState(false);
 
@@ -22,7 +26,7 @@ export function SourcesPanel({ sources }: SourcesPanelProps) {
       >
         <div>
           <p className="text-sm font-semibold text-ink">参考数据源 (Sources)</p>
-          <p className="mt-1 text-xs text-slate-500">共 {sources.length} 条，点击查看切片预览、路径和重排分数</p>
+          <p className="mt-1 text-xs text-slate-500">共 {sources.length} 条，查看切片预览、路径、召回分和重排分</p>
         </div>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-brand-700">
           {open ? "收起" : "展开"}
@@ -38,8 +42,16 @@ export function SourcesPanel({ sources }: SourcesPanelProps) {
                   #{index + 1}
                 </span>
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-accent">
-                  score {source.score.toFixed(4)}
+                  {source.score_source === "recall" ? "召回分" : "重排分"} {formatScore(source.score)}
                 </span>
+                <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  recall {formatScore(source.recall_score)}
+                </span>
+                {source.rerank_score == null ? (
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                    重排不可用
+                  </span>
+                ) : null}
               </div>
               <p className="mt-3 break-all text-sm font-medium text-ink">{source.filepath}</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">{source.preview}</p>

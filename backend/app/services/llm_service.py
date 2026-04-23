@@ -33,7 +33,9 @@ class LLMService:
         user_question: str,
         context_chunks: list[dict[str, Any]],
         chat_model: ChatModel,
+        prompt_template: str | None = None,
     ) -> str:
+        system_prompt = prompt_template.strip() if prompt_template and prompt_template.strip() else SYSTEM_PROMPT
         context_text = "\n\n".join(
             [
                 f"--- 来源文档: {doc.get('filepath', '未知文件')} ---\n{doc['content']}"
@@ -41,19 +43,19 @@ class LLMService:
             ]
         )
         if chat_model == ChatModel.gpt_4o:
-            return self._generate_with_gpt(user_question, context_text)
+            return self._generate_with_gpt(user_question, context_text, system_prompt)
         if chat_model == ChatModel.claude_opus_45:
-            return self._generate_with_claude(user_question, context_text)
+            return self._generate_with_claude(user_question, context_text, system_prompt)
         raise ValueError(f"Unsupported chat model: {chat_model}")
 
-    def _generate_with_gpt(self, user_question: str, context_text: str) -> str:
+    def _generate_with_gpt(self, user_question: str, context_text: str, system_prompt: str) -> str:
         headers = {
             "Content-Type": "application/json",
             "api-key": self.settings.nexus_api_key,
         }
         payload = {
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": f"【参考资料】:\n{context_text}\n\n【问题】: {user_question}",
@@ -72,9 +74,9 @@ class LLMService:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
-    def _generate_with_claude(self, user_question: str, context_text: str) -> str:
+    def _generate_with_claude(self, user_question: str, context_text: str, system_prompt: str) -> str:
         client = self._get_claude_client()
-        combined_prompt = f"{SYSTEM_PROMPT}\n\n【参考资料】:\n{context_text}\n\n【问题】: {user_question}"
+        combined_prompt = f"{system_prompt}\n\n【参考资料】:\n{context_text}\n\n【问题】: {user_question}"
         response = client.converse(
             modelId=self.settings.claude_model_id,
             messages=[{"role": "user", "content": [{"text": combined_prompt}]}],

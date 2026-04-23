@@ -29,6 +29,8 @@ class RerankService:
                     {
                         **doc,
                         "score": score,
+                        "rerank_score": score,
+                        "score_source": "rerank",
                         "preview": self._build_preview(doc["content"]),
                     }
                 )
@@ -43,11 +45,17 @@ class RerankService:
                 fallback.append(
                     {
                         **doc,
-                        "score": 0.0,
+                        "score": self._fallback_score(doc),
+                        "rerank_score": None,
+                        "score_source": "recall",
                         "preview": self._build_preview(doc.get("content", "")),
                     }
                 )
             return fallback
+
+    def _fallback_score(self, doc: dict[str, Any]) -> float:
+        recall_score = doc.get("recall_score")
+        return float(recall_score) if recall_score is not None else 0.0
 
     def _get_reranker(self) -> Any:
         if self._reranker is not None:

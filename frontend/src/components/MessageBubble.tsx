@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../types/chat";
+import { MarkdownContent } from "./MarkdownContent";
 import { SourcesPanel } from "./SourcesPanel";
 
 interface MessageBubbleProps {
@@ -20,8 +21,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div className={`flex ${wrapperClass}`}>
-      <div className={`max-w-3xl rounded-[24px] px-5 py-4 shadow-sm ${bubbleClass}`}>
-        <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+      <div className={`${isUser ? "max-w-3xl" : "w-full max-w-none"} rounded-[24px] px-5 py-4 shadow-sm ${bubbleClass}`}>
+        {isUser || isSystem || message.isError ? (
+          <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+        ) : (
+          <MarkdownContent content={message.content} />
+        )}
         {message.meta ? <p className="mt-3 text-xs opacity-75">{message.meta}</p> : null}
         {!isUser && !isSystem && message.sources ? <SourcesPanel sources={message.sources} /> : null}
       </div>

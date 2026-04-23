@@ -44,7 +44,9 @@ class ChatService:
                 final_docs.append(
                     {
                         **doc,
-                        "score": 0.0,
+                        "score": float(doc.get("recall_score") or 0.0),
+                        "rerank_score": None,
+                        "score_source": "recall",
                         "preview": preview,
                     }
                 )
@@ -60,6 +62,7 @@ class ChatService:
             user_question=request.question,
             context_chunks=final_docs,
             chat_model=request.chat_model,
+            prompt_template=request.prompt_template,
         )
         sources = [SourceItem(**doc) for doc in final_docs]
         return ChatResponse(

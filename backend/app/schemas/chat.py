@@ -25,12 +25,20 @@ class ChatRequest(BaseModel):
     )
     top_k: int = Field(default=10, ge=1, le=20, description="Recall size before rerank")
     top_n: int = Field(default=5, ge=1, le=10, description="Final size after rerank")
+    prompt_template: str | None = Field(
+        default=None,
+        max_length=12000,
+        description="Optional system prompt override used for answer generation",
+    )
 
 
 class SourceItem(BaseModel):
     doc_id: str = Field(..., description="Chunk or document identifier")
     filepath: str = Field(..., description="Original source path")
-    score: float = Field(..., description="Rerank score")
+    score: float = Field(..., description="Primary UI score, rerank score when available")
+    rerank_score: float | None = Field(default=None, description="BGE rerank score")
+    recall_score: float | None = Field(default=None, description="Azure Search recall score")
+    score_source: str = Field(default="rerank", description="Score source shown in UI")
     preview: str = Field(..., description="Short content preview for UI display")
     content: str = Field(..., description="Full chunk content returned by backend")
 

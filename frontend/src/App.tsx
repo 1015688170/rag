@@ -15,11 +15,28 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
+const DEFAULT_PROMPT_TEMPLATE = `你是一个严谨的 RAG 问答助手。
+
+请只基于【参考资料】回答用户问题；如果资料不足，请明确说明“当前资料中没有足够依据”。
+回答要求：
+1. 优先用分段标题、列表和代码块组织内容。
+2. 命令、配置、日志、YAML、PromQL 必须放入 Markdown 代码块。
+3. 关键结论后尽量标注来源文件，格式如：*(来源: xxx.md)*。
+4. 不要编造参考资料里没有的信息。`;
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
+
 function App() {
   const [embeddingModel, setEmbeddingModel] = useState<EmbeddingModel>("ada-002");
   const [chatModel, setChatModel] = useState<ChatModel>("claude-opus-4.5");
   const [topK, setTopK] = useState(10);
   const [topN, setTopN] = useState(5);
+  const [promptTemplate, setPromptTemplate] = useState(DEFAULT_PROMPT_TEMPLATE);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,7 +64,8 @@ function App() {
         embedding_model: embeddingModel,
         chat_model: chatModel,
         top_k: topK,
-        top_n: topN,
+        top_n: Math.min(topN, topK),
+        prompt_template: promptTemplate,
       });
 
       setMessages((current) => [
@@ -88,8 +106,15 @@ function App() {
           isLoading={isLoading}
           onEmbeddingModelChange={setEmbeddingModel}
           onChatModelChange={setChatModel}
-          onTopKChange={setTopK}
-          onTopNChange={setTopN}
+          onTopKChange={(value) => {
+            const nextTopK = clampNumber(value, 1, 20);
+            setTopK(nextTopK);
+            setTopN((current) => clampNumber(current, 1, Math.min(10, nextTopK)));
+          }}
+          onTopNChange={(value) => setTopN(clampNumber(value, 1, Math.min(10, topK)))}
+          promptTemplate={promptTemplate}
+          onPromptTemplateChange={setPromptTemplate}
+          onPromptTemplateReset={() => setPromptTemplate(DEFAULT_PROMPT_TEMPLATE)}
         />
 
         <main className="flex min-h-[calc(100vh-3rem)] flex-col gap-5">

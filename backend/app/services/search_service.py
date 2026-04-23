@@ -44,11 +44,13 @@ class SearchService:
 
         documents: list[dict[str, Any]] = []
         for row in results:
+            recall_score = row.get("@search.score")
             documents.append(
                 {
                     "doc_id": str(row.get("id", "")),
                     "filepath": str(row.get("filepath", "unknown")),
                     "content": str(row.get("content", "")),
+                    "recall_score": float(recall_score) if recall_score is not None else None,
                 }
             )
         return documents

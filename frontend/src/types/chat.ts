@@ -7,12 +7,16 @@ export interface ChatRequest {
   chat_model: ChatModel;
   top_k: number;
   top_n: number;
+  prompt_template?: string;
 }
 
 export interface SourceItem {
   doc_id: string;
   filepath: string;
   score: number;
+  rerank_score?: number | null;
+  recall_score?: number | null;
+  score_source?: "rerank" | "recall" | string;
   preview: string;
   content: string;
 }
