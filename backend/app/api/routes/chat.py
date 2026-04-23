@@ -27,3 +27,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"RAG pipeline failed: {exc}",
         ) from exc
+
+
+@router.get("/rerank/status", summary="Inspect local reranker health")
+async def rerank_status() -> dict:
+    return chat_service.rerank_service.status()
