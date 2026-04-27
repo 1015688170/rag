@@ -1,0 +1,130 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+ xmlns:v="urn:schemas-microsoft-com:vml"
+ xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+ xmlns:w10="urn:schemas-microsoft-com:office:word"
+ xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+ xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+ xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+ xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+ xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+ mc:Ignorable="w14 wp14">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t xml:space="preserve">RAG 流程说明</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">1. 文档目的</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">本文档用于说明本系统的 RAG 流程，即系统如何基于知识库内容完成“检索资料、筛选片段、生成回答、返回依据”的全过程。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">2. RAG 是什么</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">RAG，即 Retrieval-Augmented Generation，具体含义是“检索增强生成”。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">它不是让大模型直接凭已有知识回答问题，而是先从知识库中检索相关内容，再基于检索到的内容生成答案。这样可以提升回答的针对性、可追溯性和可控性。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">3. 整体流程</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">本系统的处理流程如下：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">1. 用户输入问题。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">2. 系统将问题转换为向量表示。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">3. 系统在知识库中进行混合检索，召回相关片段。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">4. 系统对召回片段进行重排，筛选出最相关内容。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">5. 系统将问题与最终片段一起提交给大模型生成答案。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">6. 系统返回答案，并同时返回参考片段来源。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">可概括为：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">用户问题 -&gt; 向量化 -&gt; 知识库检索 -&gt; 结果重排 -&gt; 大模型生成 -&gt; 答案与来源返回</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">4. 各阶段说明</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.1 问题输入</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">用户提出问题后，系统接收本次问答请求，并进入 RAG 处理流程。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">这一阶段的输入是用户的自然语言问题，例如某项规范、操作步骤、故障原因或处理方式。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.2 向量化</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">系统首先将用户问题转为向量。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">向量，即文本的数值表示。它的作用是让系统能够从语义层面理解问题，而不只依赖关键词完全一致，便于检索含义相近的知识内容。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.3 知识库检索</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">向量生成后，系统会到知识库中检索相关资料。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">当前采用的是混合检索方式，包含两部分：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 关键词检索：查找与问题文字表述接近的内容。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 向量检索：查找与问题语义相近的内容。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">通过两种方式结合，系统能够同时兼顾“字面匹配能力”和“语义理解能力”，提高召回结果的完整性。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">这一阶段的输出是若干候选知识片段。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.4 结果重排</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">知识库召回的片段通常不止一条，且相关性强弱不同，因此系统会对候选片段进行二次排序。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">重排，即根据“用户问题与片段内容是否真正相关”重新打分排序，保留最重要的若干条结果。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">这一阶段的作用是：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 提高进入大模型上下文的内容质量。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 减少无关信息干扰。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 提升最终回答的准确性。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.5 答案生成</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">系统将筛选后的关键片段作为参考资料，与用户问题一起提交给大模型生成最终答案。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">这一阶段中，大模型的职责不是自由发挥，而是基于检索出的资料进行整理、归纳和表达。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">因此，最终回答的依据来自知识库，而不是完全来自模型自身记忆。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading3"/></w:pPr><w:r><w:t xml:space="preserve">4.6 来源返回</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">系统在返回答案时，会同步返回本次回答所参考的知识片段来源。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">这一机制的意义是：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 让答案具备可追溯性。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 便于用户核对依据。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 便于后续审阅和确认。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">5. 流程特点</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">本系统的 RAG 流程主要体现以下特点：</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 先检索、后生成，降低模型脱离知识库直接作答的风险。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 基于知识库内容生成答案，增强结果可信度。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 通过重排机制提高片段相关性，减少无关内容干扰。</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">â€¢ 回答附带来源信息，便于追溯和核验。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">6. 异常兜底</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">当知识库中未检索到足够相关的内容时，系统不会强行生成缺乏依据的回答，而是返回无法形成可信答案的提示信息。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">当重排模块异常时，系统也可以直接使用检索结果继续完成后续流程，以保证系统具备基本可用性。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t xml:space="preserve">7. 总结</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">本系统的核心不是“让大模型直接回答问题”，而是“先从知识库中找到依据，再让大模型基于依据生成答案”。</w:t></w:r></w:p>
+    <w:p/>
+    <w:p><w:r><w:t xml:space="preserve">因此，该流程本质上是一条围绕知识检索、内容筛选和答案生成构成的闭环流程，重点体现的是回答有依据、结果可追溯、过程较可控。</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+      <w:cols w:space="708"/>
+      <w:docGrid w:linePitch="360"/>
+    </w:sectPr>
+  </w:body>
+</w:document>
