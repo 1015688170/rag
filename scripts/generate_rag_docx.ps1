@@ -1,11 +1,11 @@
 param(
-    [string]$OutputFile = "RAG_Flow_Client_Report_v2.docx"
+    [string]$OutputFile = "RAG_System_Flow_Report.docx"
 )
 
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
-$sourcePath = Join-Path $root "docs\\rag_flow_client_report.md"
+$sourcePath = Join-Path $root "docs\\rag_system_flow_report.md"
 $outputPath = Join-Path $root ("docs\\" + $OutputFile)
 $tempDir = Join-Path $root ("tmp\\rag-docx-" + [Guid]::NewGuid().ToString("N"))
 
@@ -186,7 +186,7 @@ $coreXml = @"
  xmlns:dcterms="http://purl.org/dc/terms/"
  xmlns:dcmitype="http://purl.org/dc/dcmitype/"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>RAG系统流程说明_甲方版</dc:title>
+  <dc:title>RAG系统流程说明</dc:title>
   <dc:subject>RAG流程说明</dc:subject>
   <dc:creator>Codex</dc:creator>
   <cp:lastModifiedBy>Codex</cp:lastModifiedBy>
