@@ -58,6 +58,19 @@ class ChatService:
                 sources=[],
                 source_count=0,
             )
+        if self._should_reject_by_rerank_score(final_docs):
+            sources = [SourceItem(**doc) for doc in final_docs]
+            return ChatResponse(
+                answer=(
+                    "抱歉，当前检索到的资料与问题相关性不足，无法生成严谨合规的可信回答。\n\n"
+                    f"系统已启用证据门槛：最高重排分低于 {self.rerank_service.settings.min_rerank_score:g} 时拒答。"
+                    "建议补充更明确的问题关键词，或完善知识库中的相关运维规范、SOP、命令示例和故障说明。"
+                ),
+                model=request.chat_model,
+                embedding_model=request.embedding_model,
+                sources=sources,
+                source_count=len(sources),
+            )
         answer = self.llm_service.generate(
             user_question=request.question,
             context_chunks=final_docs,
@@ -72,3 +85,9 @@ class ChatService:
             sources=sources,
             source_count=len(sources),
         )
+
+    def _should_reject_by_rerank_score(self, docs: list[dict]) -> bool:
+        rerank_scores = [doc.get("rerank_score") for doc in docs if doc.get("rerank_score") is not None]
+        if not rerank_scores:
+            return False
+        return max(float(score) for score in rerank_scores) < self.rerank_service.settings.min_rerank_score

@@ -32,9 +32,11 @@ CLAUDE_ENDPOINT=
 SEARCH_ENDPOINT=
 SEARCH_KEY=
 RERANKER_MODEL_PATH=/opt/models/bge-reranker-v2-m3
+MIN_RERANK_SCORE=0
 ```
 
 `RERANKER_MODEL_PATH` 必须指向本地模型目录，目录里应包含 `config.json`、tokenizer 文件和模型权重文件。
+`MIN_RERANK_SCORE` 是证据门槛，默认 `0`。当重排可用且最高重排分低于该值时，系统会拒答，避免低相关资料进入生成阶段。
 
 ## 本地启动后端
 

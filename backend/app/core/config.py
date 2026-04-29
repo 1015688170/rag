@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     reranker_model_path: str = Field(default="", alias="RERANKER_MODEL_PATH")
     reranker_use_fp16: bool = Field(default=True, alias="RERANKER_USE_FP16")
+    min_rerank_score: float = Field(default=0.0, alias="MIN_RERANK_SCORE")
 
     hf_endpoint: str = Field(default="https://hf-mirror.com", alias="HF_ENDPOINT")
     hf_hub_offline: str = Field(default="1", alias="HF_HUB_OFFLINE")
