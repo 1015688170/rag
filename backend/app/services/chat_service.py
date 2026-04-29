@@ -58,12 +58,14 @@ class ChatService:
                 sources=[],
                 source_count=0,
             )
-        if self._should_reject_by_rerank_score(final_docs):
-            sources = [SourceItem(**doc) for doc in final_docs]
+        rejected_docs = final_docs
+        final_docs = self._filter_docs_by_rerank_score(final_docs)
+        if not final_docs:
+            sources = [SourceItem(**doc) for doc in rejected_docs]
             return ChatResponse(
                 answer=(
                     "抱歉，当前检索到的资料与问题相关性不足，无法生成严谨合规的可信回答。\n\n"
-                    f"系统已启用证据门槛：最高重排分低于 {self.rerank_service.settings.min_rerank_score:g} 时拒答。"
+                    f"系统已启用证据门槛：重排分低于 {self.rerank_service.settings.min_rerank_score:g} 的片段不会进入生成阶段。"
                     "建议补充更明确的问题关键词，或完善知识库中的相关运维规范、SOP、命令示例和故障说明。"
                 ),
                 model=request.chat_model,
@@ -86,8 +88,12 @@ class ChatService:
             source_count=len(sources),
         )
 
-    def _should_reject_by_rerank_score(self, docs: list[dict]) -> bool:
-        rerank_scores = [doc.get("rerank_score") for doc in docs if doc.get("rerank_score") is not None]
-        if not rerank_scores:
-            return False
-        return max(float(score) for score in rerank_scores) < self.rerank_service.settings.min_rerank_score
+    def _filter_docs_by_rerank_score(self, docs: list[dict]) -> list[dict]:
+        if not any(doc.get("rerank_score") is not None for doc in docs):
+            return docs
+        threshold = self.rerank_service.settings.min_rerank_score
+        return [
+            doc
+            for doc in docs
+            if doc.get("rerank_score") is not None and float(doc["rerank_score"]) >= threshold
+        ]
