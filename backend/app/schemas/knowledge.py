@@ -9,6 +9,19 @@ class IndexListResponse(BaseModel):
     defaults: dict[str, str] = Field(default_factory=dict)
 
 
+class SearchIndexCreateRequest(BaseModel):
+    index_name: str | None = Field(default=None, min_length=1, max_length=128)
+    embedding_model: EmbeddingModel = Field(default=EmbeddingModel.ada_002)
+
+
+class SearchIndexCreateResponse(BaseModel):
+    index_name: str
+    status: str
+    message: str
+    embedding_model: EmbeddingModel
+    vector_dimensions: int
+
+
 class DocumentUploadResponse(BaseModel):
     document_id: str
     task_id: str

@@ -7,6 +7,8 @@ import type {
   EmbeddingModel,
   IndexListResponse,
   IngestTaskResponse,
+  SearchIndexCreateRequest,
+  SearchIndexCreateResponse,
 } from "../types/chat";
 
 const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -48,6 +50,29 @@ export async function fetchIndexes(): Promise<IndexListResponse> {
   if (!response.ok) {
     throw new Error(response.statusText || "Failed to fetch indexes.");
   }
+  return response.json();
+}
+
+export async function createSearchIndex(payload: SearchIndexCreateRequest): Promise<SearchIndexCreateResponse> {
+  const response = await fetch(buildApiUrl("/search-index/create"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let message = "Index creation failed.";
+    try {
+      const data = await response.json();
+      message = data.detail ?? message;
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+
   return response.json();
 }
 

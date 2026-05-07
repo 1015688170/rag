@@ -10,10 +10,13 @@ interface SettingsPanelProps {
   promptTemplate: string;
   isLoading: boolean;
   isUploading: boolean;
+  isCreatingIndex: boolean;
   uploadStatus?: string;
+  indexCreateStatus?: string;
   onEmbeddingModelChange: (value: EmbeddingModel) => void;
   onChatModelChange: (value: ChatModel) => void;
   onSelectedIndexChange: (value: string) => void;
+  onCreateIndex: () => void;
   onDocumentUpload: (file: File) => void;
   onTopKChange: (value: number) => void;
   onTopNChange: (value: number) => void;
@@ -63,7 +66,9 @@ function SelectField<T extends string>(props: {
 }
 
 export function SettingsPanel(props: SettingsPanelProps) {
-  const indexOptions = props.indexes.length > 0 ? props.indexes : props.selectedIndex ? [props.selectedIndex] : [];
+  const indexOptions = Array.from(
+    new Set([...(props.selectedIndex ? [props.selectedIndex] : []), ...props.indexes]),
+  );
 
   return (
     <aside className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-panel backdrop-blur xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)]">
@@ -94,6 +99,17 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   ))}
                 </select>
                 <p className="mt-1 text-xs leading-5 text-slate-500">Azure AI Search index for retrieval and upload.</p>
+                <button
+                  type="button"
+                  disabled={props.isLoading || props.isUploading || props.isCreatingIndex || !props.selectedIndex}
+                  onClick={props.onCreateIndex}
+                  className="mt-3 w-full rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {props.isCreatingIndex ? "Creating..." : "Create index"}
+                </button>
+                {props.indexCreateStatus ? (
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{props.indexCreateStatus}</p>
+                ) : null}
               </div>
             </label>
             <SelectField

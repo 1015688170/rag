@@ -153,6 +153,7 @@ pip install -r requirements.txt
 
 ### Ingest APIs
 
+- `POST /api/search-index/create`: create or initialize the Azure AI Search RAG chunk index.
 - `POST /api/documents/upload`: upload and synchronously ingest one document.
 - `GET /api/documents`: list document metadata by `created_at` descending.
 - `GET /api/ingest-tasks/{task_id}`: inspect an ingest task.
@@ -160,9 +161,42 @@ pip install -r requirements.txt
 
 The existing `/api/chat` and `/api/rerank/status` endpoints remain available.
 
+### Create search index
+
+The UI provides a `Create index` button next to the Search Index selector. Use it to initialize the selected Azure AI Search index before uploading documents, instead of creating the schema manually in the Azure portal.
+
+API:
+
+```http
+POST /api/search-index/create
+Content-Type: application/json
+
+{
+  "index_name": "swp-embedding-002-k8s-index",
+  "embedding_model": "ada-002"
+}
+```
+
+`index_name` is optional. When omitted, the backend uses the default index for the selected embedding model: `INDEX_ADA` for `ada-002`, `INDEX_005` for `google-005`.
+
+Responses:
+
+- Created: `{"status":"created","message":"index created successfully",...}`
+- Already exists: `{"status":"already_exists","message":"index already exists",...}`
+- Failed: HTTP 500 with the Azure SDK error in `detail`.
+
+Vector dimensions are read from backend configuration:
+
+```env
+ADA002_VECTOR_DIMENSIONS=1536
+GOOGLE_005_VECTOR_DIMENSIONS=768
+```
+
+If you change embedding providers or models, update these values before creating a new index. The `content_vector` dimension must match the embedding vector returned by `EmbeddingService`.
+
 ### Azure AI Search index fields
 
-The upload pipeline writes these fields to Azure AI Search. The target index must contain them; otherwise indexing will fail and the document/task status will be set to `failed`.
+The create-index endpoint creates these fields, and the upload pipeline writes to the same schema. If an index is created elsewhere, it must contain these fields; otherwise indexing will fail and the document/task status will be set to `failed`.
 
 | Field | Type | Required index behavior |
 | --- | --- | --- |

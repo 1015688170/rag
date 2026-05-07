@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     ada002_api_url: str = Field(default="", alias="ADA002_API_URL")
     google_005_base_url: str = Field(default="", alias="GOOGLE_005_BASE_URL")
     google_embedding_model_name: str = Field(default="text-embedding-005", alias="GOOGLE_MODEL_NAME")
+    ada002_vector_dimensions: int = Field(default=1536, alias="ADA002_VECTOR_DIMENSIONS")
+    google_005_vector_dimensions: int = Field(default=768, alias="GOOGLE_005_VECTOR_DIMENSIONS")
 
     gpt4o_api_url: str = Field(default="", alias="GPT4O_API_URL")
     claude_endpoint: str = Field(default="", alias="CLAUDE_ENDPOINT")

@@ -45,6 +45,19 @@ export interface IndexListResponse {
   defaults: Record<string, string>;
 }
 
+export interface SearchIndexCreateRequest {
+  index_name?: string;
+  embedding_model: EmbeddingModel;
+}
+
+export interface SearchIndexCreateResponse {
+  index_name: string;
+  status: string;
+  message: string;
+  embedding_model: EmbeddingModel;
+  vector_dimensions: number;
+}
+
 export interface DocumentUploadResponse {
   index_name: string;
   filename: string;
