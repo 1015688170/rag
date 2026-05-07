@@ -33,7 +33,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # 本地模型和缓存产物
-models/
+/models/
 *.safetensors
 *.bin
 *.pt

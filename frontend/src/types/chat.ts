@@ -49,6 +49,43 @@ export interface DocumentUploadResponse {
   index_name: string;
   filename: string;
   embedding_model: EmbeddingModel;
+  document_id: string;
+  task_id: string;
+  file_hash: string;
   chunk_count: number;
-  uploaded_count: number;
+  status: string;
+}
+
+export interface DocumentListItem {
+  id: string;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  chunk_count: number;
+  status: string;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentListResponse {
+  documents: DocumentListItem[];
+}
+
+export interface IngestTaskResponse {
+  task_id: string;
+  document_id: string;
+  filename: string;
+  status: string;
+  stage?: string | null;
+  chunk_count: number;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentDeleteResponse {
+  document_id: string;
+  status: string;
+  deleted_chunks: number;
 }

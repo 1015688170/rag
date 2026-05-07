@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Composer } from "./components/Composer";
+import { DocumentManager } from "./components/DocumentManager";
 import { MessageBubble } from "./components/MessageBubble";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { createId } from "./lib/id";
@@ -90,6 +91,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>();
+  const [activeView, setActiveView] = useState<"chat" | "documents">("chat");
   const hasConversation = messages.length > 0;
 
   useEffect(() => {
@@ -134,7 +136,7 @@ function App() {
         indexName: selectedIndex,
         embeddingModel,
       });
-      setUploadStatus(`${response.filename}: ${response.uploaded_count}/${response.chunk_count} chunks uploaded.`);
+      setUploadStatus(`${response.filename}: ${response.status}, ${response.chunk_count} chunks.`);
     } catch (error) {
       setUploadStatus(error instanceof Error ? error.message : "Upload failed.");
     } finally {
@@ -226,6 +228,24 @@ function App() {
         />
 
         <main className="flex h-[calc(100vh-3rem)] min-h-0 flex-col">
+          <div className="mb-4 flex shrink-0 gap-2">
+            {(["chat", "documents"] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setActiveView(view)}
+                className={
+                  activeView === view
+                    ? "rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                    : "rounded-full border border-white bg-white/80 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                }
+              >
+                {view === "chat" ? "Chat" : "Documents"}
+              </button>
+            ))}
+          </div>
+          {activeView === "chat" ? (
+            <>
           <section
             className={
               hasConversation
@@ -259,6 +279,12 @@ function App() {
           <div className="mt-5 shrink-0">
             <Composer value={draft} isLoading={isLoading} onChange={setDraft} onSubmit={handleSubmit} />
           </div>
+            </>
+          ) : (
+            <div className="min-h-0 flex-1">
+              <DocumentManager selectedIndex={selectedIndex} embeddingModel={embeddingModel} />
+            </div>
+          )}
         </main>
       </div>
     </div>

@@ -1,4 +1,13 @@
-import type { ChatRequest, ChatResponse, DocumentUploadResponse, EmbeddingModel, IndexListResponse } from "../types/chat";
+import type {
+  ChatRequest,
+  ChatResponse,
+  DocumentDeleteResponse,
+  DocumentListResponse,
+  DocumentUploadResponse,
+  EmbeddingModel,
+  IndexListResponse,
+  IngestTaskResponse,
+} from "../types/chat";
 
 const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 const API_BASE_URL = (RAW_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
@@ -68,6 +77,47 @@ export async function uploadDocument(payload: {
     throw new Error(message);
   }
 
+  return response.json();
+}
+
+export async function fetchDocuments(): Promise<DocumentListResponse> {
+  const response = await fetch(buildApiUrl("/documents"));
+  if (!response.ok) {
+    throw new Error(response.statusText || "Failed to fetch documents.");
+  }
+  return response.json();
+}
+
+export async function fetchIngestTask(taskId: string): Promise<IngestTaskResponse> {
+  const response = await fetch(buildApiUrl(`/ingest-tasks/${encodeURIComponent(taskId)}`));
+  if (!response.ok) {
+    throw new Error(response.statusText || "Failed to fetch ingest task.");
+  }
+  return response.json();
+}
+
+export async function deleteDocument(payload: {
+  documentId: string;
+  indexName: string;
+  embeddingModel: EmbeddingModel;
+}): Promise<DocumentDeleteResponse> {
+  const params = new URLSearchParams({
+    index_name: payload.indexName,
+    embedding_model: payload.embeddingModel,
+  });
+  const response = await fetch(buildApiUrl(`/documents/${encodeURIComponent(payload.documentId)}?${params}`), {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    let message = "Delete failed.";
+    try {
+      const data = await response.json();
+      message = data.detail ?? message;
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
   return response.json();
 }
 
