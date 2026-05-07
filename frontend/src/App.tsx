@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Composer } from "./components/Composer";
 import { MessageBubble } from "./components/MessageBubble";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { createId } from "./lib/id";
-import { sendChatMessage } from "./lib/api";
+import { fetchIndexes, sendChatMessage, uploadDocument } from "./lib/api";
 import type { ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
 
 const initialMessages: ChatMessage[] = [];
@@ -79,13 +79,68 @@ function EmptyConversation({ onPickQuestion }: { onPickQuestion: (question: stri
 function App() {
   const [embeddingModel, setEmbeddingModel] = useState<EmbeddingModel>("ada-002");
   const [chatModel, setChatModel] = useState<ChatModel>("claude-opus-4.5");
+  const [selectedIndex, setSelectedIndex] = useState("");
+  const [indexes, setIndexes] = useState<string[]>([]);
+  const [indexDefaults, setIndexDefaults] = useState<Record<string, string>>({});
   const [topK, setTopK] = useState(10);
   const [topN, setTopN] = useState(5);
   const [promptTemplate, setPromptTemplate] = useState(DEFAULT_PROMPT_TEMPLATE);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>();
   const hasConversation = messages.length > 0;
+
+  useEffect(() => {
+    let isActive = true;
+    fetchIndexes()
+      .then((response) => {
+        if (!isActive) {
+          return;
+        }
+        setIndexes(response.indexes);
+        setIndexDefaults(response.defaults);
+        const defaultIndex = response.defaults[embeddingModel] || response.indexes[0] || "";
+        setSelectedIndex((current) => current || defaultIndex);
+      })
+      .catch((error) => {
+        if (isActive) {
+          setUploadStatus(error instanceof Error ? error.message : "Failed to load indexes.");
+        }
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  function handleEmbeddingModelChange(value: EmbeddingModel) {
+    setEmbeddingModel(value);
+    const defaultIndex = indexDefaults[value];
+    if (defaultIndex) {
+      setSelectedIndex(defaultIndex);
+    }
+  }
+
+  async function handleDocumentUpload(file: File) {
+    if (!selectedIndex || isUploading) {
+      return;
+    }
+    setIsUploading(true);
+    setUploadStatus(`Uploading ${file.name}...`);
+    try {
+      const response = await uploadDocument({
+        file,
+        indexName: selectedIndex,
+        embeddingModel,
+      });
+      setUploadStatus(`${response.filename}: ${response.uploaded_count}/${response.chunk_count} chunks uploaded.`);
+    } catch (error) {
+      setUploadStatus(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   async function handleSubmit() {
     const question = draft.trim();
@@ -107,6 +162,7 @@ function App() {
     try {
       const response = await sendChatMessage({
         question,
+        index_name: selectedIndex || undefined,
         embedding_model: embeddingModel,
         chat_model: chatModel,
         top_k: topK,
@@ -121,7 +177,7 @@ function App() {
           role: "assistant",
           content: response.answer,
           sources: response.sources,
-          meta: `${response.embedding_model} / ${response.model} / ${response.source_count} sources`,
+          meta: `${response.index_name} / ${response.embedding_model} / ${response.model} / ${response.source_count} sources`,
         },
       ]);
     } catch (error) {
@@ -147,11 +203,17 @@ function App() {
         <SettingsPanel
           embeddingModel={embeddingModel}
           chatModel={chatModel}
+          selectedIndex={selectedIndex}
+          indexes={indexes}
           topK={topK}
           topN={topN}
           isLoading={isLoading}
-          onEmbeddingModelChange={setEmbeddingModel}
+          isUploading={isUploading}
+          uploadStatus={uploadStatus}
+          onEmbeddingModelChange={handleEmbeddingModelChange}
           onChatModelChange={setChatModel}
+          onSelectedIndexChange={setSelectedIndex}
+          onDocumentUpload={handleDocumentUpload}
           onTopKChange={(value) => {
             const nextTopK = clampNumber(value, 1, 20);
             setTopK(nextTopK);

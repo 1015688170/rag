@@ -9,3 +9,5 @@ transformers==4.44.2
 tokenizers<0.20
 boto3
 google-genai
+python-multipart
+pypdf

@@ -21,11 +21,13 @@ class ChatService:
         self.llm_service = llm_service
 
     async def chat(self, request: ChatRequest) -> ChatResponse:
+        index_name = self.search_service.resolve_index_name(request.embedding_model, request.index_name)
         query_vector = self.embedding_service.embed(request.question, request.embedding_model)
         raw_docs = self.search_service.search(
             query_text=request.question,
             query_vector=query_vector,
             embedding_model=request.embedding_model,
+            index_name=index_name,
             top_k=request.top_k,
         )
         try:
@@ -55,6 +57,7 @@ class ChatService:
                 answer="抱歉，当前知识库中未检索到相关片段，无法生成可信回答。",
                 model=request.chat_model,
                 embedding_model=request.embedding_model,
+                index_name=index_name,
                 sources=[],
                 source_count=0,
             )
@@ -70,6 +73,7 @@ class ChatService:
                 ),
                 model=request.chat_model,
                 embedding_model=request.embedding_model,
+                index_name=index_name,
                 sources=sources,
                 source_count=len(sources),
             )
@@ -84,6 +88,7 @@ class ChatService:
             answer=answer,
             model=request.chat_model,
             embedding_model=request.embedding_model,
+            index_name=index_name,
             sources=sources,
             source_count=len(sources),
         )

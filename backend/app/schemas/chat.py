@@ -15,6 +15,12 @@ class ChatModel(str, Enum):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000, description="User input question")
+    index_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="Optional Azure AI Search index selected by the user",
+    )
     embedding_model: EmbeddingModel = Field(
         default=EmbeddingModel.ada_002,
         description="Embedding model used for retrieval",
@@ -47,5 +53,6 @@ class ChatResponse(BaseModel):
     answer: str = Field(..., description="LLM final answer")
     model: ChatModel = Field(..., description="Selected chat model")
     embedding_model: EmbeddingModel = Field(..., description="Selected embedding model")
+    index_name: str = Field(..., description="Azure AI Search index used for retrieval")
     sources: list[SourceItem] = Field(default_factory=list, description="Retrieved source chunks")
     source_count: int = Field(..., description="Number of final sources returned")

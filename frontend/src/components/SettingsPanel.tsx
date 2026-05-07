@@ -3,12 +3,18 @@ import type { ChatModel, EmbeddingModel } from "../types/chat";
 interface SettingsPanelProps {
   embeddingModel: EmbeddingModel;
   chatModel: ChatModel;
+  selectedIndex: string;
+  indexes: string[];
   topK: number;
   topN: number;
   promptTemplate: string;
   isLoading: boolean;
+  isUploading: boolean;
+  uploadStatus?: string;
   onEmbeddingModelChange: (value: EmbeddingModel) => void;
   onChatModelChange: (value: ChatModel) => void;
+  onSelectedIndexChange: (value: string) => void;
+  onDocumentUpload: (file: File) => void;
   onTopKChange: (value: number) => void;
   onTopNChange: (value: number) => void;
   onPromptTemplateChange: (value: string) => void;
@@ -57,6 +63,8 @@ function SelectField<T extends string>(props: {
 }
 
 export function SettingsPanel(props: SettingsPanelProps) {
+  const indexOptions = props.indexes.length > 0 ? props.indexes : props.selectedIndex ? [props.selectedIndex] : [];
+
   return (
     <aside className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/80 shadow-panel backdrop-blur xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)]">
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-brand-100 via-white to-emerald-50" />
@@ -69,6 +77,25 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <section className="space-y-3">
+            <label className="block rounded-2xl border border-line bg-white/85 p-3 transition focus-within:border-brand-500">
+              <span className="block text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Search Index</span>
+              <div className="mt-2 rounded-2xl bg-slate-50 px-3 py-2">
+                <select
+                  value={props.selectedIndex}
+                  disabled={props.isLoading || props.isUploading || indexOptions.length === 0}
+                  onChange={(event) => props.onSelectedIndexChange(event.target.value)}
+                  className="w-full border-none bg-transparent p-0 text-sm font-semibold text-ink outline-none"
+                >
+                  {indexOptions.length === 0 ? <option value="">No indexes</option> : null}
+                  {indexOptions.map((indexName) => (
+                    <option key={indexName} value={indexName}>
+                      {indexName}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Azure AI Search index for retrieval and upload.</p>
+              </div>
+            </label>
             <SelectField
               label="Embedding"
               value={props.embeddingModel}
@@ -83,6 +110,30 @@ export function SettingsPanel(props: SettingsPanelProps) {
               options={chatOptions}
               onChange={props.onChatModelChange}
             />
+          </section>
+
+          <section className="rounded-2xl border border-line bg-white/85 p-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Knowledge Upload</p>
+              <p className="mt-1 text-sm text-slate-600">Supports JSON, Markdown, TXT, DOCX, and PDF.</p>
+            </div>
+            <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm font-medium text-brand-700 transition hover:border-brand-500 hover:bg-white">
+              <input
+                type="file"
+                className="sr-only"
+                accept=".json,.md,.txt,.docx,.pdf,application/json,application/pdf"
+                disabled={props.isLoading || props.isUploading || !props.selectedIndex}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) {
+                    props.onDocumentUpload(file);
+                  }
+                }}
+              />
+              {props.isUploading ? "Uploading..." : "Select document"}
+            </label>
+            {props.uploadStatus ? <p className="mt-2 text-xs leading-5 text-slate-500">{props.uploadStatus}</p> : null}
           </section>
 
           <section className="rounded-2xl border border-line bg-white/85 p-3">
@@ -153,6 +204,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <div className="flex items-center justify-between gap-4">
                 <dt>Embedding</dt>
                 <dd className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">{props.embeddingModel}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt>Index</dt>
+                <dd className="max-w-[12rem] truncate rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">{props.selectedIndex || "Not selected"}</dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt>Chat</dt>
