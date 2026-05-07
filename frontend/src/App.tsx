@@ -5,7 +5,7 @@ import { DocumentManager } from "./components/DocumentManager";
 import { MessageBubble } from "./components/MessageBubble";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { createId } from "./lib/id";
-import { createSearchIndex, fetchIndexes, sendChatMessage, uploadDocument } from "./lib/api";
+import { createSearchIndex, fetchIndexes, sendChatMessage } from "./lib/api";
 import type { ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
 
 const initialMessages: ChatMessage[] = [];
@@ -89,10 +89,9 @@ function App() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<string>();
   const [isCreatingIndex, setIsCreatingIndex] = useState(false);
   const [indexCreateStatus, setIndexCreateStatus] = useState<string>();
+  const [newIndexName, setNewIndexName] = useState("");
   const [activeView, setActiveView] = useState<"chat" | "documents">("chat");
   const hasConversation = messages.length > 0;
 
@@ -109,7 +108,7 @@ function App() {
       })
       .catch((error) => {
         if (isActive) {
-          setUploadStatus(error instanceof Error ? error.message : "Failed to load indexes.");
+          setIndexCreateStatus(error instanceof Error ? error.message : "Failed to load indexes.");
         }
       });
   }
@@ -130,39 +129,22 @@ function App() {
     }
   }
 
-  async function handleDocumentUpload(file: File) {
-    if (!selectedIndex || isUploading) {
-      return;
-    }
-    setIsUploading(true);
-    setUploadStatus(`Uploading ${file.name}...`);
-    try {
-      const response = await uploadDocument({
-        file,
-        indexName: selectedIndex,
-        embeddingModel,
-      });
-      setUploadStatus(`${response.filename}: ${response.status}, ${response.chunk_count} chunks.`);
-    } catch (error) {
-      setUploadStatus(error instanceof Error ? error.message : "Upload failed.");
-    } finally {
-      setIsUploading(false);
-    }
-  }
-
   async function handleCreateIndex() {
-    if (!selectedIndex || isCreatingIndex) {
+    const indexName = newIndexName.trim();
+    if (!indexName || isCreatingIndex) {
       return;
     }
     setIsCreatingIndex(true);
-    setIndexCreateStatus(`Creating ${selectedIndex}...`);
+    setIndexCreateStatus(`Creating ${indexName}...`);
     try {
       const response = await createSearchIndex({
-        index_name: selectedIndex,
+        index_name: indexName,
         embedding_model: embeddingModel,
       });
       setIndexCreateStatus(`${response.message} (${response.vector_dimensions} dimensions).`);
       await loadIndexes();
+      setSelectedIndex(response.index_name);
+      setNewIndexName("");
     } catch (error) {
       setIndexCreateStatus(error instanceof Error ? error.message : "Index creation failed.");
     } finally {
@@ -236,15 +218,14 @@ function App() {
           topK={topK}
           topN={topN}
           isLoading={isLoading}
-          isUploading={isUploading}
           isCreatingIndex={isCreatingIndex}
-          uploadStatus={uploadStatus}
           indexCreateStatus={indexCreateStatus}
+          newIndexName={newIndexName}
           onEmbeddingModelChange={handleEmbeddingModelChange}
           onChatModelChange={setChatModel}
           onSelectedIndexChange={setSelectedIndex}
+          onNewIndexNameChange={setNewIndexName}
           onCreateIndex={handleCreateIndex}
-          onDocumentUpload={handleDocumentUpload}
           onTopKChange={(value) => {
             const nextTopK = clampNumber(value, 1, 20);
             setTopK(nextTopK);

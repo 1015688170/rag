@@ -41,7 +41,7 @@ class SearchService:
 
     def create_chunk_index(self, embedding_model: EmbeddingModel, index_name: str | None = None) -> dict[str, Any]:
         from azure.core.credentials import AzureKeyCredential
-        from azure.core.exceptions import ResourceExistsError
+        from azure.core.exceptions import HttpResponseError, ResourceExistsError
         from azure.search.documents.indexes import SearchIndexClient
         from azure.search.documents.indexes.models import (
             HnswAlgorithmConfiguration,
@@ -99,7 +99,9 @@ class SearchService:
 
         try:
             client.create_index(index)
-        except ResourceExistsError:
+        except (ResourceExistsError, HttpResponseError) as exc:
+            if not self._is_index_exists_error(exc):
+                raise
             return {
                 "index_name": selected_index,
                 "status": "already_exists",
@@ -115,6 +117,17 @@ class SearchService:
             "embedding_model": embedding_model,
             "vector_dimensions": vector_dimensions,
         }
+
+    def _is_index_exists_error(self, exc: Exception) -> bool:
+        error_code = str(getattr(getattr(exc, "error", None), "code", "") or getattr(exc, "error_code", ""))
+        message = str(exc)
+        exists_markers = (
+            "ResourceNameAlreadyInUse",
+            "CannotCreateExistingIndex",
+            "already exists",
+            "because it already exists",
+        )
+        return any(marker in error_code or marker in message for marker in exists_markers)
 
     def upload_documents(self, index_name: str, documents: list[dict[str, Any]]) -> int:
         from azure.core.credentials import AzureKeyCredential

@@ -9,15 +9,14 @@ interface SettingsPanelProps {
   topN: number;
   promptTemplate: string;
   isLoading: boolean;
-  isUploading: boolean;
   isCreatingIndex: boolean;
-  uploadStatus?: string;
   indexCreateStatus?: string;
+  newIndexName: string;
   onEmbeddingModelChange: (value: EmbeddingModel) => void;
   onChatModelChange: (value: ChatModel) => void;
   onSelectedIndexChange: (value: string) => void;
+  onNewIndexNameChange: (value: string) => void;
   onCreateIndex: () => void;
-  onDocumentUpload: (file: File) => void;
   onTopKChange: (value: number) => void;
   onTopNChange: (value: number) => void;
   onPromptTemplateChange: (value: string) => void;
@@ -87,7 +86,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <div className="mt-2 rounded-2xl bg-slate-50 px-3 py-2">
                 <select
                   value={props.selectedIndex}
-                  disabled={props.isLoading || props.isUploading || indexOptions.length === 0}
+                  disabled={props.isLoading || indexOptions.length === 0}
                   onChange={(event) => props.onSelectedIndexChange(event.target.value)}
                   className="w-full border-none bg-transparent p-0 text-sm font-semibold text-ink outline-none"
                 >
@@ -98,10 +97,18 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Azure AI Search index for retrieval and upload.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Selected index is used for retrieval and upload.</p>
+                <input
+                  type="text"
+                  value={props.newIndexName}
+                  disabled={props.isLoading || props.isCreatingIndex}
+                  onChange={(event) => props.onNewIndexNameChange(event.target.value)}
+                  placeholder="New index name to create"
+                  className="mt-3 w-full rounded-full border border-line bg-white px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+                />
                 <button
                   type="button"
-                  disabled={props.isLoading || props.isUploading || props.isCreatingIndex || !props.selectedIndex}
+                  disabled={props.isLoading || props.isCreatingIndex || !props.newIndexName.trim()}
                   onClick={props.onCreateIndex}
                   className="mt-3 w-full rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -126,30 +133,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
               options={chatOptions}
               onChange={props.onChatModelChange}
             />
-          </section>
-
-          <section className="rounded-2xl border border-line bg-white/85 p-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Knowledge Upload</p>
-              <p className="mt-1 text-sm text-slate-600">Supports JSON, Markdown, TXT, DOCX, and PDF.</p>
-            </div>
-            <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm font-medium text-brand-700 transition hover:border-brand-500 hover:bg-white">
-              <input
-                type="file"
-                className="sr-only"
-                accept=".json,.md,.txt,.docx,.pdf,application/json,application/pdf"
-                disabled={props.isLoading || props.isUploading || !props.selectedIndex}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.currentTarget.value = "";
-                  if (file) {
-                    props.onDocumentUpload(file);
-                  }
-                }}
-              />
-              {props.isUploading ? "Uploading..." : "Select document"}
-            </label>
-            {props.uploadStatus ? <p className="mt-2 text-xs leading-5 text-slate-500">{props.uploadStatus}</p> : null}
           </section>
 
           <section className="rounded-2xl border border-line bg-white/85 p-3">
