@@ -144,6 +144,12 @@ backend/storage/rag.db
 
 These runtime files are ignored by Git. For Docker or server deployments, mount `backend/storage` as a persistent volume; otherwise `rag.db` and uploaded source files will be lost when the container or release directory is replaced.
 
+The application upload limit is 20MB per file. If the frontend shows HTTP 413 / `Request Entity Too Large`, the request was rejected before ingestion, usually by Nginx or another reverse proxy. Set Nginx above the app limit, for example:
+
+```nginx
+client_max_body_size 25m;
+```
+
 New backend dependencies are in `backend/requirements.txt`: `SQLAlchemy`, `python-multipart`, `pypdf`, and `python-docx`. Install them before starting the backend:
 
 ```bash

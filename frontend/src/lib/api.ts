@@ -93,6 +93,9 @@ export async function uploadDocument(payload: {
 
   if (!response.ok) {
     let message = "Upload failed.";
+    if (response.status === 413) {
+      throw new Error("File is too large for the server/proxy. Check Nginx client_max_body_size; app limit is 20 MB.");
+    }
     try {
       const data = await response.json();
       message = data.detail ?? message;

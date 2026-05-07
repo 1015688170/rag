@@ -168,6 +168,7 @@ sudo tee /etc/nginx/sites-available/swp-rag-workbench > /dev/null <<'EOF'
 server {
     listen 80;
     server_name _;
+    client_max_body_size 25m;
 
     root /opt/swp-rag-workbench/current/frontend/dist;
     index index.html;

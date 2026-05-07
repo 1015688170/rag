@@ -8,6 +8,8 @@ interface DocumentManagerProps {
   embeddingModel: EmbeddingModel;
 }
 
+const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
+
 function formatSize(size: number): string {
   if (size < 1024) {
     return `${size} B`;
@@ -49,6 +51,10 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
   async function handleUpload(file: File) {
     if (!selectedIndex || isUploading) {
       setStatus("Select an Azure AI Search index first.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_SIZE) {
+      setStatus(`File is too large (${formatSize(file.size)}). Maximum size is 20 MB.`);
       return;
     }
     setIsUploading(true);
