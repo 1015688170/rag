@@ -9,8 +9,11 @@ class IndexListResponse(BaseModel):
 
 
 class DocumentUploadResponse(BaseModel):
-    index_name: str
+    document_id: str
+    task_id: str
     filename: str
-    embedding_model: EmbeddingModel
+    file_hash: str
     chunk_count: int
-    uploaded_count: int
+    status: str
+    index_name: str | None = None
+    embedding_model: EmbeddingModel | None = None

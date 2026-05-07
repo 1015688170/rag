@@ -2,10 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.chat import router as chat_router
+from app.api.routes.documents import router as documents_router
 from app.core.config import settings
+from app.core.database import init_db
 
 
 def create_application() -> FastAPI:
+    init_db()
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -26,6 +29,7 @@ def create_application() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(chat_router, prefix=settings.api_prefix)
+    app.include_router(documents_router, prefix=settings.api_prefix)
     return app
 
 

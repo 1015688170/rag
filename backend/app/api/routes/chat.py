@@ -1,8 +1,8 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse, EmbeddingModel
-from app.schemas.knowledge import DocumentUploadResponse, IndexListResponse
+from app.schemas.knowledge import IndexListResponse
 from app.services.chat_service import ChatService
 from app.services.document_ingest_service import DocumentIngestService
 from app.services.embedding_service import EmbeddingService
@@ -55,27 +55,3 @@ async def list_indexes() -> IndexListResponse:
         indexes = sorted({index for index in defaults.values() if index})
     return IndexListResponse(indexes=indexes, defaults=defaults)
 
-
-@router.post("/documents/upload", response_model=DocumentUploadResponse, summary="Upload a document to an index")
-async def upload_document(
-    file: UploadFile = File(...),
-    index_name: str = Form(...),
-    embedding_model: EmbeddingModel = Form(default=EmbeddingModel.ada_002),
-) -> DocumentUploadResponse:
-    try:
-        resolved_index = search_service.resolve_index_name(embedding_model, index_name)
-        result = await document_ingest_service.ingest(
-            file=file,
-            index_name=resolved_index,
-            embedding_model=embedding_model,
-        )
-        return DocumentUploadResponse(
-            index_name=resolved_index,
-            embedding_model=embedding_model,
-            **result,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document upload failed: {exc}",
-        ) from exc

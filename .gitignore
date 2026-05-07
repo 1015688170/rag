@@ -17,6 +17,11 @@ venv/
 env/
 backend/.venv/
 
+# RAG document storage
+backend/storage/uploads/
+backend/storage/rag.db
+backend/storage/*.db
+
 # Node 依赖和前端构建产物
 node_modules/
 frontend/node_modules/
