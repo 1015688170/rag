@@ -32,13 +32,15 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
   const [uploadResult, setUploadResult] = useState<DocumentUploadResponse>();
   const [task, setTask] = useState<IngestTaskResponse>();
 
-  async function loadDocuments() {
+  async function loadDocuments(): Promise<DocumentListItem[]> {
     setIsLoading(true);
     try {
       const response = await fetchDocuments();
       setDocuments(response.documents);
+      return response.documents;
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to load documents.");
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -69,8 +71,14 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
       setTask(taskResponse);
       await loadDocuments();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Upload failed.");
-      await loadDocuments();
+      const message = error instanceof Error ? error.message : "Upload failed.";
+      const latestDocuments = await loadDocuments();
+      const latestMatch = latestDocuments.find((document) => document.filename === file.name);
+      if (latestMatch?.status === "success") {
+        setStatus(`${file.name}: success, ${latestMatch.chunk_count} chunks.`);
+      } else {
+        setStatus(message);
+      }
     } finally {
       setIsUploading(false);
     }

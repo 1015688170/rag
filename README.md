@@ -150,6 +150,14 @@ The application upload limit is 20MB per file. If the frontend shows HTTP 413 / 
 client_max_body_size 25m;
 ```
 
+Document ingestion is synchronous in the current version. Larger files can spend time in parsing, embedding, and Azure AI Search indexing. If the frontend shows HTTP 504 / `Gateway Time-out` but the document list later shows `success`, the gateway timed out while the backend continued processing. Increase proxy timeouts, for example:
+
+```nginx
+proxy_connect_timeout 300s;
+proxy_send_timeout 300s;
+proxy_read_timeout 300s;
+```
+
 New backend dependencies are in `backend/requirements.txt`: `SQLAlchemy`, `python-multipart`, `pypdf`, and `python-docx`. Install them before starting the backend:
 
 ```bash
