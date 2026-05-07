@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 from app.schemas.chat import EmbeddingModel
 
@@ -17,3 +18,37 @@ class DocumentUploadResponse(BaseModel):
     status: str
     index_name: str | None = None
     embedding_model: EmbeddingModel | None = None
+
+
+class DocumentListItem(BaseModel):
+    id: str
+    filename: str
+    file_type: str
+    file_size: int
+    chunk_count: int
+    status: str
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentListItem] = Field(default_factory=list)
+
+
+class IngestTaskResponse(BaseModel):
+    task_id: str
+    document_id: str
+    filename: str
+    status: str
+    stage: str | None = None
+    chunk_count: int
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentDeleteResponse(BaseModel):
+    document_id: str
+    status: str
+    deleted_chunks: int

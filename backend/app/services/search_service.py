@@ -52,6 +52,28 @@ class SearchService:
             uploaded_count += self.upload_documents(index_name, chunks[start : start + batch_size])
         return uploaded_count
 
+    def delete_chunks_by_doc_id(self, index_name: str, doc_id: str) -> int:
+        from azure.core.credentials import AzureKeyCredential
+        from azure.search.documents import SearchClient
+
+        client = SearchClient(
+            endpoint=self.settings.search_endpoint,
+            index_name=self.resolve_index_name(EmbeddingModel.ada_002, index_name),
+            credential=AzureKeyCredential(self.settings.search_key),
+        )
+        escaped_doc_id = doc_id.replace("'", "''")
+        results = client.search(
+            search_text="*",
+            filter=f"doc_id eq '{escaped_doc_id}'",
+            select=["id"],
+            top=1000,
+        )
+        keys = [{"id": str(row["id"])} for row in results if row.get("id")]
+        if not keys:
+            return 0
+        delete_results = client.delete_documents(documents=keys)
+        return sum(1 for result in delete_results if result.succeeded)
+
     def search(
         self,
         query_text: str,
