@@ -46,6 +46,12 @@ class SearchService:
         results = client.merge_or_upload_documents(documents=documents)
         return sum(1 for result in results if result.succeeded)
 
+    def index_chunks(self, index_name: str, chunks: list[dict[str, Any]], batch_size: int = 100) -> int:
+        uploaded_count = 0
+        for start in range(0, len(chunks), batch_size):
+            uploaded_count += self.upload_documents(index_name, chunks[start : start + batch_size])
+        return uploaded_count
+
     def search(
         self,
         query_text: str,
