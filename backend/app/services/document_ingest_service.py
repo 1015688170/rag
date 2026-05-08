@@ -21,10 +21,24 @@ from app.services.search_service import SearchService
 
 
 @dataclass
-class ParsedSection:
+class DocumentSection:
     section_title: str
+    section_path: str
     source_type: str
     content: str
+    page_start: int | None = None
+    page_end: int | None = None
+
+
+@dataclass
+class DocumentChunk:
+    chunk_index: int
+    section_title: str
+    section_path: str
+    source_type: str
+    content: str
+    page_start: int | None = None
+    page_end: int | None = None
 
 
 class DocumentIngestService:
@@ -133,7 +147,7 @@ class DocumentIngestService:
     def check_duplicate(self, db: Session, file_hash: str) -> Document | None:
         return db.query(Document).filter(Document.file_hash == file_hash).first()
 
-    def parse_document(self, filepath: Path, file_type: str) -> list[ParsedSection]:
+    def parse_document(self, filepath: Path, file_type: str) -> list[DocumentSection]:
         suffix = f".{file_type.lower().lstrip('.')}"
         if suffix == ".json":
             return self._parse_json(filepath)
@@ -147,43 +161,51 @@ class DocumentIngestService:
             return self._parse_pdf(filepath)
         raise ValueError(f"Unsupported file type: {suffix}.")
 
-    def split_chunks(self, sections: list[ParsedSection]) -> list[dict[str, str]]:
-        chunks: list[dict[str, str]] = []
+    def split_chunks(self, sections: list[DocumentSection]) -> list[DocumentChunk]:
+        chunks: list[DocumentChunk] = []
         for section in sections:
             text = self._normalize_text(section.content)
             if not text:
                 continue
-            for part in self._window_text(text):
+            for part in self._split_section_content(text):
                 chunks.append(
-                    {
-                        "section_title": section.section_title,
-                        "source_type": section.source_type,
-                        "content": part,
-                    }
+                    DocumentChunk(
+                        chunk_index=len(chunks),
+                        section_title=section.section_title,
+                        section_path=section.section_path,
+                        source_type=section.source_type,
+                        content=part,
+                        page_start=section.page_start,
+                        page_end=section.page_end,
+                    )
                 )
         return chunks
 
     def embed_chunks(
         self,
         document: Document,
-        chunks: list[dict[str, str]],
+        chunks: list[DocumentChunk],
         embedding_model: EmbeddingModel,
     ) -> list[dict[str, Any]]:
         created_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         indexed_chunks: list[dict[str, Any]] = []
-        for index, chunk in enumerate(chunks):
-            chunk_id = f"{document.id}_{index}"
+        for chunk in chunks:
+            chunk_id = f"{document.id}_{chunk.chunk_index}"
             indexed_chunks.append(
                 {
                     "id": chunk_id,
                     "doc_id": document.id,
                     "chunk_id": chunk_id,
+                    "chunk_index": chunk.chunk_index,
                     "filename": document.filename,
                     "filepath": document.filepath,
-                    "section_title": chunk["section_title"],
-                    "source_type": chunk["source_type"],
-                    "content": chunk["content"],
-                    "content_vector": self.embedding_service.embed(chunk["content"], embedding_model),
+                    "section_title": chunk.section_title,
+                    "section_path": chunk.section_path,
+                    "source_type": chunk.source_type,
+                    "content": chunk.content,
+                    "content_vector": self.embedding_service.embed(chunk.content, embedding_model),
+                    "page_start": chunk.page_start,
+                    "page_end": chunk.page_end,
                     "created_at": created_at,
                     "file_hash": document.file_hash,
                 }
@@ -225,86 +247,213 @@ class DocumentIngestService:
             task.chunk_count = chunk_count
         db.commit()
 
-    def _parse_markdown(self, filepath: Path) -> list[ParsedSection]:
+    def _parse_markdown(self, filepath: Path) -> list[DocumentSection]:
         text = filepath.read_text(encoding="utf-8-sig")
-        sections: list[ParsedSection] = []
+        sections: list[DocumentSection] = []
         current_title = "$"
+        current_path = "$"
+        heading_stack: list[str] = []
         current_lines: list[str] = []
         for line in text.splitlines():
             heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
             if heading and current_lines:
-                sections.append(ParsedSection(current_title, "md", "\n".join(current_lines)))
+                sections.append(DocumentSection(current_title, current_path, "md", "\n".join(current_lines)))
                 current_lines = []
             if heading:
+                level = len(heading.group(1))
                 current_title = heading.group(2).strip()
+                heading_stack = heading_stack[: level - 1]
+                heading_stack.append(current_title)
+                current_path = "/".join(heading_stack)
             current_lines.append(line)
         if current_lines:
-            sections.append(ParsedSection(current_title, "md", "\n".join(current_lines)))
+            sections.append(DocumentSection(current_title, current_path, "md", "\n".join(current_lines)))
         return sections
 
-    def _parse_plain_text(self, filepath: Path, source_type: str) -> list[ParsedSection]:
+    def _parse_plain_text(self, filepath: Path, source_type: str) -> list[DocumentSection]:
         text = filepath.read_text(encoding="utf-8-sig")
         paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
-        return [ParsedSection(f"paragraph[{index}]", source_type, paragraph) for index, paragraph in enumerate(paragraphs)]
+        return self._sections_from_paragraphs(paragraphs, source_type)
 
-    def _parse_docx(self, filepath: Path) -> list[ParsedSection]:
+    def _parse_docx(self, filepath: Path) -> list[DocumentSection]:
         try:
             from docx import Document as DocxDocument
         except ImportError as exc:
             raise RuntimeError("DOCX upload requires the python-docx package.") from exc
 
         doc = DocxDocument(str(filepath))
-        paragraphs = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
-        return [ParsedSection(f"paragraph[{index}]", "docx", paragraph) for index, paragraph in enumerate(paragraphs)]
+        sections: list[DocumentSection] = []
+        heading_stack: list[str] = []
+        current_title = "$"
+        current_path = "$"
+        current_lines: list[str] = []
+        has_heading = False
+        plain_paragraphs: list[str] = []
 
-    def _parse_pdf(self, filepath: Path) -> list[ParsedSection]:
+        for paragraph in doc.paragraphs:
+            text = paragraph.text.strip()
+            if not text:
+                continue
+            style_name = paragraph.style.name if paragraph.style is not None else ""
+            heading = re.match(r"Heading\s+(\d+)", style_name, flags=re.IGNORECASE)
+            if heading:
+                has_heading = True
+                if current_lines:
+                    sections.append(DocumentSection(current_title, current_path, "docx", "\n\n".join(current_lines)))
+                    current_lines = []
+                level = int(heading.group(1))
+                current_title = text
+                heading_stack = heading_stack[: level - 1]
+                heading_stack.append(text)
+                current_path = "/".join(heading_stack)
+                current_lines.append(text)
+            else:
+                current_lines.append(text)
+                plain_paragraphs.append(text)
+
+        if has_heading:
+            if current_lines:
+                sections.append(DocumentSection(current_title, current_path, "docx", "\n\n".join(current_lines)))
+            return sections
+        return self._sections_from_paragraphs(plain_paragraphs, "docx")
+
+    def _parse_pdf(self, filepath: Path) -> list[DocumentSection]:
         try:
             from pypdf import PdfReader
         except ImportError as exc:
             raise RuntimeError("PDF upload requires the pypdf package.") from exc
 
         reader = PdfReader(str(filepath))
-        sections: list[ParsedSection] = []
+        paragraphs: list[tuple[str, int]] = []
         for index, page in enumerate(reader.pages):
             text = page.extract_text() or ""
-            if text.strip():
-                sections.append(ParsedSection(f"page[{index + 1}]", "pdf", text))
-        if not sections:
-            raise ValueError("PDF text extraction returned no text.")
-        return sections
+            # TODO: filter repeated headers, footers, and standalone page numbers.
+            for paragraph in re.split(r"\n\s*\n", text):
+                normalized = self._normalize_text(paragraph)
+                if normalized:
+                    paragraphs.append((normalized, index + 1))
+        if not paragraphs:
+            raise ValueError("PDF text extraction returned no text. Scanned PDFs/OCR are not supported in this version.")
+        return self._sections_from_paged_paragraphs(paragraphs, "pdf")
 
-    def _parse_json(self, filepath: Path) -> list[ParsedSection]:
+    def _parse_json(self, filepath: Path) -> list[DocumentSection]:
         try:
             data = json.loads(filepath.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}.") from exc
+            raise ValueError(f"JSON parse error: {exc.msg} at line {exc.lineno}, column {exc.colno}.") from exc
 
         sections = self._json_sections(data, "$")
         if not sections:
-            sections = [ParsedSection("$", "json", json.dumps(data, ensure_ascii=False, indent=2))]
+            sections = [DocumentSection("$", "$", "json", json.dumps(data, ensure_ascii=False, indent=2))]
         return sections
 
-    def _json_sections(self, value: Any, path: str) -> list[ParsedSection]:
+    def _json_sections(self, value: Any, path: str) -> list[DocumentSection]:
+        serialized = json.dumps(value, ensure_ascii=False, indent=2)
+        if len(serialized) <= self.chunk_size or not isinstance(value, (dict, list)) or not value:
+            return [DocumentSection(path, path, "json", serialized)]
+
         if isinstance(value, dict):
-            sections: list[ParsedSection] = []
-            if not value:
-                return [ParsedSection(path, "json", f"{path}: {{}}")]
+            sections: list[DocumentSection] = []
             for key, child in value.items():
                 child_path = f"{path}.{key}" if path != "$" else f"$.{key}"
                 sections.extend(self._json_sections(child, child_path))
             return sections
-        if isinstance(value, list):
-            if not value:
-                return [ParsedSection(path, "json", f"{path}: []")]
-            return [
-                ParsedSection(f"{path}[{index}]", "json", json.dumps(item, ensure_ascii=False, indent=2))
-                for index, item in enumerate(value)
-            ]
-        return [ParsedSection(path, "json", f"{path}: {json.dumps(value, ensure_ascii=False)}")]
 
-    def _window_text(self, text: str) -> list[str]:
+        sections = []
+        for index, item in enumerate(value):
+            item_path = f"{path}[{index}]"
+            sections.extend(self._json_sections(item, item_path))
+        return sections
+
+    def _sections_from_paragraphs(self, paragraphs: list[str], source_type: str) -> list[DocumentSection]:
+        sections: list[DocumentSection] = []
+        current: list[str] = []
+        for paragraph in paragraphs:
+            text = self._normalize_text(paragraph)
+            if not text:
+                continue
+            if current and len("\n\n".join(current)) + len(text) + 2 > self.chunk_size:
+                title = f"paragraph[{len(sections)}]"
+                sections.append(DocumentSection(title, title, source_type, "\n\n".join(current)))
+                current = []
+            current.append(text)
+        if current:
+            title = f"paragraph[{len(sections)}]"
+            sections.append(DocumentSection(title, title, source_type, "\n\n".join(current)))
+        return sections
+
+    def _sections_from_paged_paragraphs(
+        self,
+        paragraphs: list[tuple[str, int]],
+        source_type: str,
+    ) -> list[DocumentSection]:
+        sections: list[DocumentSection] = []
+        current: list[str] = []
+        page_start: int | None = None
+        page_end: int | None = None
+
+        for paragraph, page_number in paragraphs:
+            if current and len("\n\n".join(current)) + len(paragraph) + 2 > self.chunk_size:
+                title = f"page[{page_start}]" if page_start == page_end else f"page[{page_start}-{page_end}]"
+                sections.append(
+                    DocumentSection(title, title, source_type, "\n\n".join(current), page_start, page_end)
+                )
+                current = []
+                page_start = None
+                page_end = None
+
+            current.append(paragraph)
+            page_start = page_number if page_start is None else page_start
+            page_end = page_number
+
+        if current:
+            title = f"page[{page_start}]" if page_start == page_end else f"page[{page_start}-{page_end}]"
+            sections.append(DocumentSection(title, title, source_type, "\n\n".join(current), page_start, page_end))
+        return sections
+
+    def _split_section_content(self, text: str) -> list[str]:
         if len(text) <= self.chunk_size:
             return [text]
+
+        units = self._semantic_units(text)
+        chunks: list[str] = []
+        current = ""
+        for unit in units:
+            if not unit:
+                continue
+            if len(unit) > self.chunk_size:
+                if current:
+                    chunks.append(current.strip())
+                    current = ""
+                chunks.extend(self._char_windows(unit))
+                continue
+
+            candidate = unit if not current else f"{current}\n\n{unit}"
+            if len(candidate) <= self.chunk_size:
+                current = candidate
+                continue
+
+            if current:
+                chunks.append(current.strip())
+                overlap = self._overlap_suffix(current)
+                current = f"{overlap}\n\n{unit}" if overlap else unit
+                if len(current) > self.chunk_size:
+                    chunks.extend(self._char_windows(current))
+                    current = ""
+            else:
+                current = unit
+
+        if current.strip():
+            chunks.append(current.strip())
+        return [chunk for chunk in chunks if chunk.strip()]
+
+    def _semantic_units(self, text: str) -> list[str]:
+        units = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+        if len(units) >= 2 and re.fullmatch(r"#{1,6}\s+.+", units[0]):
+            units = [f"{units[0]}\n\n{units[1]}", *units[2:]]
+        return units or [text]
+
+    def _char_windows(self, text: str) -> list[str]:
         chunks: list[str] = []
         start = 0
         while start < len(text):
@@ -316,6 +465,13 @@ class DocumentIngestService:
                 break
             start = max(end - self.chunk_overlap, start + 1)
         return chunks
+
+    def _overlap_suffix(self, text: str) -> str:
+        suffix = text[-self.chunk_overlap :].strip()
+        first_break = suffix.find("\n")
+        if first_break > 0:
+            suffix = suffix[first_break:].strip()
+        return suffix
 
     def _normalize_text(self, text: str) -> str:
         return re.sub(r"\n{3,}", "\n\n", text).strip()

@@ -128,6 +128,32 @@ Upload flow:
 4. If a document with the same `file_hash` has already reached `success`, return `already_exists` and skip Azure AI Search writes.
 5. Parse text, split chunks, generate embeddings, write chunks to Azure AI Search, then update SQLite metadata.
 
+### Chunking strategy
+
+Document ingestion uses a two-stage strategy:
+
+1. Parse each file into `DocumentSection` records based on the file type.
+2. Split only oversized sections into `DocumentChunk` records.
+
+Defaults:
+
+- `chunk_size=1000` chars.
+- `chunk_overlap=150` chars.
+- The current version chunks by character count, not tokens.
+- Overlap is used only when a section is longer than `chunk_size`.
+- Short sections are not forced to overlap.
+- Empty chunks are skipped.
+
+File-type parsing:
+
+- Markdown: split sections by headings from `#` through `######`; `section_path` keeps the heading hierarchy joined by `/`.
+- TXT: split text into paragraphs, then merge short paragraphs until the section approaches `chunk_size`.
+- DOCX: use `python-docx`; Heading styles become section titles, otherwise paragraphs are merged like TXT.
+- PDF: use `pypdf`; extract page text, group page paragraphs into sections, and preserve `page_start` / `page_end`. Scanned PDFs require OCR and are not supported in this version.
+- JSON: parse with Python `json`; split by JSON path, keeping small fields grouped under parent sections where possible.
+
+This can be upgraded later to tokenizer-based chunking without changing the upload API.
+
 SQLite is used for the first version. The database file is:
 
 ```text
@@ -217,12 +243,16 @@ The create-index endpoint creates these fields, and the upload pipeline writes t
 | `id` | `Edm.String` | key |
 | `doc_id` | `Edm.String` | filterable |
 | `chunk_id` | `Edm.String` | filterable |
+| `chunk_index` | `Edm.Int32` | filterable/sortable |
 | `filename` | `Edm.String` | searchable/filterable |
 | `filepath` | `Edm.String` | searchable/filterable |
 | `section_title` | `Edm.String` | searchable/filterable |
+| `section_path` | `Edm.String` | searchable/filterable |
 | `source_type` | `Edm.String` | filterable |
 | `content` | `Edm.String` | searchable |
 | `content_vector` | vector collection | searchable vector field, same dimension as the selected embedding model |
+| `page_start` | `Edm.Int32` | filterable/sortable |
+| `page_end` | `Edm.Int32` | filterable/sortable |
 | `created_at` | `Edm.DateTimeOffset` or `Edm.String` | retrievable |
 | `file_hash` | `Edm.String` | filterable |
 
@@ -230,7 +260,7 @@ Deletion uses `doc_id eq '<document_id>'`, so `doc_id` must be filterable. RAG r
 
 ### JSON parsing
 
-JSON uploads are parsed with Python's standard `json` module. The parser supports JSON objects and arrays, splits content by top-level keys, array elements, or nested JSON paths, and stores each path as `section_title`.
+JSON uploads are parsed with Python's standard `json` module. The parser supports JSON objects and arrays, splits content by JSON path, and stores each path as both `section_title` and `section_path`.
 
 Examples:
 
@@ -242,6 +272,8 @@ $.dashboards[0].panels[3]
 ```
 
 JSON chunks are written with `source_type=json`. Invalid JSON fails ingestion and records the parsing error in both `documents.error_message` and `ingest_tasks.error_message`.
+
+PDF chunks keep `page_start` and `page_end` so answers can later cite page ranges. If no text can be extracted, ingestion fails with a message indicating that scanned PDFs/OCR are not supported in this version.
 
 ### Local test checklist
 
