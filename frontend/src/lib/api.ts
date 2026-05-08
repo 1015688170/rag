@@ -23,9 +23,66 @@ function buildApiUrl(path: string): string {
   return `${API_BASE_URL}${baseHasApi ? "" : "/api"}${path}`;
 }
 
+async function parseError(response: Response, fallback: string, emitAuthExpired = true): Promise<string> {
+  if (response.status === 401) {
+    if (emitAuthExpired && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("rag-auth-expired"));
+    }
+    try {
+      const data = await response.json();
+      return data.detail ?? "Not authenticated";
+    } catch {
+      return "Not authenticated";
+    }
+  }
+  try {
+    const data = await response.json();
+    return data.detail ?? fallback;
+  } catch {
+    return response.statusText || fallback;
+  }
+}
+
+export async function login(username: string, password: string): Promise<{ authenticated: boolean; username: string }> {
+  const response = await fetch(buildApiUrl("/auth/login"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response, "Login failed.", false));
+  }
+  return response.json();
+}
+
+export async function logout(): Promise<{ authenticated: boolean }> {
+  const response = await fetch(buildApiUrl("/auth/logout"), {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response, "Logout failed."));
+  }
+  return response.json();
+}
+
+export async function fetchCurrentUser(): Promise<{ authenticated: boolean; username: string }> {
+  const response = await fetch(buildApiUrl("/auth/me"), {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response, "Not authenticated", false));
+  }
+  return response.json();
+}
+
 export async function sendChatMessage(payload: ChatRequest): Promise<ChatResponse> {
   const response = await fetch(buildApiUrl("/chat"), {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -33,23 +90,18 @@ export async function sendChatMessage(payload: ChatRequest): Promise<ChatRespons
   });
 
   if (!response.ok) {
-    let message = "Request failed.";
-    try {
-      const data = await response.json();
-      message = data.detail ?? message;
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
+    throw new Error(await parseError(response, "Request failed."));
   }
 
   return response.json();
 }
 
 export async function fetchIndexes(): Promise<IndexListResponse> {
-  const response = await fetch(buildApiUrl("/indexes"));
+  const response = await fetch(buildApiUrl("/indexes"), {
+    credentials: "include",
+  });
   if (!response.ok) {
-    throw new Error(response.statusText || "Failed to fetch indexes.");
+    throw new Error(await parseError(response, "Failed to fetch indexes."));
   }
   return response.json();
 }
@@ -57,6 +109,7 @@ export async function fetchIndexes(): Promise<IndexListResponse> {
 export async function createSearchIndex(payload: SearchIndexCreateRequest): Promise<SearchIndexCreateResponse> {
   const response = await fetch(buildApiUrl("/search-index/create"), {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -64,14 +117,7 @@ export async function createSearchIndex(payload: SearchIndexCreateRequest): Prom
   });
 
   if (!response.ok) {
-    let message = "Index creation failed.";
-    try {
-      const data = await response.json();
-      message = data.detail ?? message;
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
+    throw new Error(await parseError(response, "Index creation failed."));
   }
 
   return response.json();
@@ -94,29 +140,29 @@ export async function uploadDocument(payload: {
   if (payload.ownerId) {
     formData.append("owner_id", payload.ownerId);
   }
-  formData.append("allowed_departments", payload.allowedDepartments || "[]");
-  formData.append("allowed_roles", payload.allowedRoles || "[]");
+  formData.append(
+    "allowed_departments",
+    Array.isArray(payload.allowedDepartments) ? payload.allowedDepartments.join(",") : payload.allowedDepartments || "[]",
+  );
+  formData.append(
+    "allowed_roles",
+    Array.isArray(payload.allowedRoles) ? payload.allowedRoles.join(",") : payload.allowedRoles || "[]",
+  );
 
   const response = await fetch(buildApiUrl("/documents/upload"), {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
 
   if (!response.ok) {
-    let message = "Upload failed.";
     if (response.status === 413) {
       throw new Error("File is too large for the server/proxy. Check Nginx client_max_body_size; app limit is 20 MB.");
     }
     if (response.status === 504) {
       throw new Error("Upload request timed out at the gateway. The backend may still be processing; refresh the document list to confirm status.");
     }
-    try {
-      const data = await response.json();
-      message = data.detail ?? message;
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
+    throw new Error(await parseError(response, "Upload failed."));
   }
 
   return response.json();
@@ -138,17 +184,21 @@ export async function fetchDocuments(payload?: {
     params.set("roles", payload.roles);
   }
   const query = params.toString();
-  const response = await fetch(buildApiUrl(`/documents${query ? `?${query}` : ""}`));
+  const response = await fetch(buildApiUrl(`/documents${query ? `?${query}` : ""}`), {
+    credentials: "include",
+  });
   if (!response.ok) {
-    throw new Error(response.statusText || "Failed to fetch documents.");
+    throw new Error(await parseError(response, "Failed to fetch documents."));
   }
   return response.json();
 }
 
 export async function fetchIngestTask(taskId: string): Promise<IngestTaskResponse> {
-  const response = await fetch(buildApiUrl(`/ingest-tasks/${encodeURIComponent(taskId)}`));
+  const response = await fetch(buildApiUrl(`/ingest-tasks/${encodeURIComponent(taskId)}`), {
+    credentials: "include",
+  });
   if (!response.ok) {
-    throw new Error(response.statusText || "Failed to fetch ingest task.");
+    throw new Error(await parseError(response, "Failed to fetch ingest task."));
   }
   return response.json();
 }
@@ -172,16 +222,10 @@ export async function deleteDocument(payload: {
   }
   const response = await fetch(buildApiUrl(`/documents/${encodeURIComponent(payload.documentId)}?${params}`), {
     method: "DELETE",
+    credentials: "include",
   });
   if (!response.ok) {
-    let message = "Delete failed.";
-    try {
-      const data = await response.json();
-      message = data.detail ?? message;
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
+    throw new Error(await parseError(response, "Delete failed."));
   }
   return response.json();
 }
@@ -211,6 +255,7 @@ export async function updateDocumentPermissions(payload: {
     buildApiUrl(`/documents/${encodeURIComponent(payload.documentId)}/permissions?${params}`),
     {
       method: "PATCH",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -231,14 +276,7 @@ export async function updateDocumentPermissions(payload: {
     },
   );
   if (!response.ok) {
-    let message = "Permission update failed.";
-    try {
-      const data = await response.json();
-      message = data.detail ?? message;
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new Error(message);
+    throw new Error(await parseError(response, "Permission update failed."));
   }
   return response.json();
 }

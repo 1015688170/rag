@@ -23,6 +23,11 @@ cp frontend/.env.example frontend/.env
 后端常用配置项包括：
 
 ```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=
+SESSION_SECRET=
+SESSION_EXPIRE_HOURS=12
+SESSION_COOKIE_SECURE=false
 NEXUS_API_KEY=
 AWS_BEARER_TOKEN_BEDROCK=
 ADA002_API_URL=
@@ -37,6 +42,56 @@ MIN_RERANK_SCORE=0
 
 `RERANKER_MODEL_PATH` 必须指向本地模型目录，目录里应包含 `config.json`、tokenizer 文件和模型权重文件。
 `MIN_RERANK_SCORE` 是证据门槛，默认 `0`。当重排可用时，低于该值的片段不会进入生成阶段；如果过滤后没有可用片段，系统会拒答，避免低相关资料参与生成。
+
+## Site login protection
+
+The workbench is protected by a simple admin login before any business API can be used. This is a site-level guard only; it does not replace document-level permission fields such as `user_id`, `department`, `roles`, `visibility`, `owner_id`, `allowed_departments`, or `allowed_roles`.
+
+Required backend environment variables:
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<set-a-strong-password>
+SESSION_SECRET=<set-a-random-secret>
+SESSION_EXPIRE_HOURS=12
+SESSION_COOKIE_SECURE=false
+```
+
+Generate a session secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Set `SESSION_COOKIE_SECURE=true` when serving the site over HTTPS in production. The backend refuses to start when `ADMIN_PASSWORD` or `SESSION_SECRET` is empty.
+
+Auth APIs:
+
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+
+All other `/api/*` routes require the `rag_session` HttpOnly cookie. `/health`, auth routes, and `OPTIONS` requests are allowed without login.
+
+Auth smoke tests:
+
+```bash
+curl -i http://127.0.0.1:8000/api/indexes
+
+curl -i -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"wrong"}'
+
+curl -i -c cookies.txt -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"你的密码"}'
+
+curl -i -b cookies.txt http://127.0.0.1:8000/api/indexes
+curl -i -b cookies.txt http://127.0.0.1:8000/api/auth/me
+
+curl -i -b cookies.txt -c cookies.txt -X POST http://127.0.0.1:8000/api/auth/logout
+curl -i -b cookies.txt http://127.0.0.1:8000/api/indexes
+```
 
 ## 本地启动后端
 

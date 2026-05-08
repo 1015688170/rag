@@ -15,6 +15,7 @@ interface SettingsPanelProps {
   userId: string;
   department: string;
   rolesText: string;
+  authenticatedUsername: string;
   onEmbeddingModelChange: (value: EmbeddingModel) => void;
   onChatModelChange: (value: ChatModel) => void;
   onSelectedIndexChange: (value: string) => void;
@@ -27,6 +28,7 @@ interface SettingsPanelProps {
   onTopNChange: (value: number) => void;
   onPromptTemplateChange: (value: string) => void;
   onPromptTemplateReset: () => void;
+  onLogout: () => void;
 }
 
 const embeddingOptions: Array<{ value: EmbeddingModel; label: string; hint: string }> = [
@@ -83,6 +85,16 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">全局设置</p>
           <h1 className="mt-3 font-display text-[2rem] font-semibold text-ink">RAG 测试台</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">把实验参数收在左侧，右边专注问答和结果验证。</p>
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/75 px-3 py-2 text-xs text-slate-600">
+            <span>已登录：{props.authenticatedUsername}</span>
+            <button
+              type="button"
+              onClick={props.onLogout}
+              className="rounded-full border border-line bg-white px-3 py-1 font-medium text-slate-600 transition hover:border-red-300 hover:text-red-600"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">

@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     cors_allow_origins: List[str] = Field(default=["*"])
     source_preview_length: int = Field(default=180, alias="SOURCE_PREVIEW_LENGTH")
+
+    admin_username: str = Field(default="admin", alias="ADMIN_USERNAME")
+    admin_password: str = Field(default="", alias="ADMIN_PASSWORD")
+    session_secret: str = Field(default="", alias="SESSION_SECRET")
+    session_expire_hours: int = Field(default=12, alias="SESSION_EXPIRE_HOURS")
+    session_cookie_secure: bool = Field(default=False, alias="SESSION_COOKIE_SECURE")
 
     nexus_api_key: str = Field(default="", alias="NEXUS_API_KEY")
     aws_bearer_token_bedrock: str = Field(default="", alias="AWS_BEARER_TOKEN_BEDROCK")
@@ -55,6 +61,18 @@ class Settings(BaseSettings):
             items = [item.strip().strip("\"'") for item in raw_value.split(",")]
             return [item for item in items if item]
         return [item.strip() for item in value.split(",") if item.strip()]
+
+    @model_validator(mode="after")
+    def validate_auth_settings(self) -> "Settings":
+        if not self.admin_password:
+            raise ValueError("ADMIN_PASSWORD must be set.")
+        if not self.session_secret:
+            raise ValueError("SESSION_SECRET must be set.")
+        if len(self.session_secret) < 32:
+            raise ValueError("SESSION_SECRET should be at least 32 characters.")
+        if self.session_expire_hours <= 0:
+            raise ValueError("SESSION_EXPIRE_HOURS must be greater than 0.")
+        return self
 
 
 settings = Settings()

@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Composer } from "./components/Composer";
 import { DocumentManager } from "./components/DocumentManager";
 import { MessageBubble } from "./components/MessageBubble";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { createId } from "./lib/id";
-import { createSearchIndex, fetchIndexes, sendChatMessage } from "./lib/api";
+import { createSearchIndex, fetchCurrentUser, fetchIndexes, login, logout, sendChatMessage } from "./lib/api";
 import type { ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
 
 const initialMessages: ChatMessage[] = [];
@@ -65,6 +65,58 @@ function parseRoles(text: string): string[] {
     .filter(Boolean);
 }
 
+function LoginPage({
+  authError,
+  isLoading,
+  onLogin,
+}: {
+  authError?: string;
+  isLoading: boolean;
+  onLogin: (username: string, password: string) => Promise<void>;
+}) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onLogin(username, password);
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,_#f9fbfe_0%,_#eef4fa_100%)] px-4 text-ink">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-panel backdrop-blur">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">登录</p>
+        <h1 className="mt-3 font-display text-3xl font-semibold">RAG 测试台</h1>
+        <div className="mt-6 space-y-3">
+          <input
+            value={username}
+            disabled={isLoading}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="用户名"
+            className="w-full rounded-full border border-line bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-brand-500"
+          />
+          <input
+            type="password"
+            value={password}
+            disabled={isLoading}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="密码"
+            className="w-full rounded-full border border-line bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-brand-500"
+          />
+        </div>
+        {authError ? <p className="mt-4 text-sm text-red-600">{authError}</p> : null}
+        <button
+          type="submit"
+          disabled={isLoading || !username.trim() || !password}
+          className="mt-6 w-full rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isLoading ? "登录中..." : "登录"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function EmptyConversation({ onPickQuestion }: { onPickQuestion: (question: string) => void }) {
   return (
     <div className="flex min-h-[42vh] flex-col items-center justify-center px-6 py-12 text-center">
@@ -86,6 +138,10 @@ function EmptyConversation({ onPickQuestion }: { onPickQuestion: (question: stri
 }
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [username, setUsername] = useState("");
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string>();
   const [embeddingModel, setEmbeddingModel] = useState<EmbeddingModel>("ada-002");
   const [chatModel, setChatModel] = useState<ChatModel>("claude-opus-4.5");
   const [selectedIndex, setSelectedIndex] = useState("");
@@ -106,6 +162,52 @@ function App() {
   const [activeView, setActiveView] = useState<"chat" | "documents">("chat");
   const hasConversation = messages.length > 0;
 
+  function handleAuthExpired(error: unknown): boolean {
+    if (error instanceof Error && error.message === "Not authenticated") {
+      setAuthenticated(false);
+      setUsername("");
+      setAuthError("登录已过期，请重新登录。");
+      return true;
+    }
+    return false;
+  }
+
+  useEffect(() => {
+    let isActive = true;
+    function handleGlobalAuthExpired() {
+      setAuthenticated(false);
+      setUsername("");
+      setAuthError("登录已过期，请重新登录。");
+    }
+    window.addEventListener("rag-auth-expired", handleGlobalAuthExpired);
+    fetchCurrentUser()
+      .then((response) => {
+        if (!isActive) {
+          return;
+        }
+        setAuthenticated(true);
+        setUsername(response.username);
+        setAuthError(undefined);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+        setAuthenticated(false);
+        setUsername("");
+        setAuthError(error instanceof Error && error.message !== "Not authenticated" ? error.message : undefined);
+      })
+      .finally(() => {
+        if (isActive) {
+          setAuthLoading(false);
+        }
+      });
+    return () => {
+      isActive = false;
+      window.removeEventListener("rag-auth-expired", handleGlobalAuthExpired);
+    };
+  }, []);
+
   async function loadIndexes(isActive = true) {
     return fetchIndexes()
       .then((response) => {
@@ -118,6 +220,9 @@ function App() {
         setSelectedIndex((current) => current || defaultIndex);
       })
       .catch((error) => {
+        if (handleAuthExpired(error)) {
+          return;
+        }
         if (isActive) {
           setIndexCreateStatus(error instanceof Error ? error.message : "Failed to load indexes.");
         }
@@ -125,12 +230,41 @@ function App() {
   }
 
   useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
     let isActive = true;
     loadIndexes(isActive);
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [authenticated]);
+
+  async function handleLogin(usernameValue: string, passwordValue: string) {
+    setAuthLoading(true);
+    setAuthError(undefined);
+    try {
+      const response = await login(usernameValue.trim(), passwordValue);
+      setAuthenticated(true);
+      setUsername(response.username);
+    } catch (error) {
+      setAuthenticated(false);
+      setAuthError(error instanceof Error ? error.message : "登录失败。");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleLogout() {
+    setAuthLoading(true);
+    try {
+      await logout();
+    } finally {
+      setAuthenticated(false);
+      setUsername("");
+      setAuthLoading(false);
+    }
+  }
 
   function handleEmbeddingModelChange(value: EmbeddingModel) {
     setEmbeddingModel(value);
@@ -157,6 +291,9 @@ function App() {
       setSelectedIndex(response.index_name);
       setNewIndexName("");
     } catch (error) {
+      if (handleAuthExpired(error)) {
+        return;
+      }
       setIndexCreateStatus(error instanceof Error ? error.message : "Index creation failed.");
     } finally {
       setIsCreatingIndex(false);
@@ -205,6 +342,9 @@ function App() {
         },
       ]);
     } catch (error) {
+      if (handleAuthExpired(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "Unknown error";
       setMessages((current) => [
         ...current,
@@ -219,6 +359,18 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (authLoading && !authenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">
+        正在检查登录状态...
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <LoginPage authError={authError} isLoading={authLoading} onLogin={handleLogin} />;
   }
 
   return (
@@ -238,6 +390,7 @@ function App() {
           userId={userId}
           department={department}
           rolesText={rolesText}
+          authenticatedUsername={username}
           onEmbeddingModelChange={handleEmbeddingModelChange}
           onChatModelChange={setChatModel}
           onSelectedIndexChange={setSelectedIndex}
@@ -255,6 +408,7 @@ function App() {
           promptTemplate={promptTemplate}
           onPromptTemplateChange={setPromptTemplate}
           onPromptTemplateReset={() => setPromptTemplate(DEFAULT_PROMPT_TEMPLATE)}
+          onLogout={handleLogout}
         />
 
         <main className="flex h-[calc(100vh-3rem)] min-h-0 flex-col">
