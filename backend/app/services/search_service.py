@@ -185,6 +185,47 @@ class SearchService:
         delete_results = client.delete_documents(documents=keys)
         return sum(1 for result in delete_results if result.succeeded)
 
+    def update_chunk_permissions_by_doc_id(
+        self,
+        index_name: str,
+        doc_id: str,
+        *,
+        visibility: str,
+        owner_id: str | None,
+        allowed_departments: list[str],
+        allowed_roles: list[str],
+    ) -> int:
+        from azure.core.credentials import AzureKeyCredential
+        from azure.search.documents import SearchClient
+
+        client = SearchClient(
+            endpoint=self.settings.search_endpoint,
+            index_name=self.resolve_index_name(EmbeddingModel.ada_002, index_name),
+            credential=AzureKeyCredential(self.settings.search_key),
+        )
+        escaped_doc_id = doc_id.replace("'", "''")
+        results = client.search(
+            search_text="*",
+            filter=f"doc_id eq '{escaped_doc_id}'",
+            select=["id"],
+            top=1000,
+        )
+        updates = [
+            {
+                "id": str(row["id"]),
+                "visibility": visibility,
+                "owner_id": owner_id,
+                "allowed_departments": allowed_departments,
+                "allowed_roles": allowed_roles,
+            }
+            for row in results
+            if row.get("id")
+        ]
+        if not updates:
+            return 0
+        update_results = client.merge_documents(documents=updates)
+        return sum(1 for result in update_results if result.succeeded)
+
     def search(
         self,
         query_text: str,

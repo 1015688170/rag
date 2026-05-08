@@ -3,6 +3,7 @@ import type {
   ChatResponse,
   DocumentDeleteResponse,
   DocumentListResponse,
+  DocumentPermissionUpdateResponse,
   DocumentUploadResponse,
   EmbeddingModel,
   IndexListResponse,
@@ -82,8 +83,8 @@ export async function uploadDocument(payload: {
   embeddingModel: EmbeddingModel;
   visibility?: string;
   ownerId?: string;
-  allowedDepartments?: string;
-  allowedRoles?: string;
+  allowedDepartments?: string[] | string;
+  allowedRoles?: string[] | string;
 }): Promise<DocumentUploadResponse> {
   const formData = new FormData();
   formData.append("file", payload.file);
@@ -174,6 +175,63 @@ export async function deleteDocument(payload: {
   });
   if (!response.ok) {
     let message = "Delete failed.";
+    try {
+      const data = await response.json();
+      message = data.detail ?? message;
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+export async function updateDocumentPermissions(payload: {
+  documentId: string;
+  indexName: string;
+  embeddingModel: EmbeddingModel;
+  visibility: string;
+  ownerId?: string;
+  allowedDepartments?: string[] | string;
+  allowedRoles?: string[] | string;
+  userId?: string;
+  roles?: string;
+}): Promise<DocumentPermissionUpdateResponse> {
+  const params = new URLSearchParams({
+    index_name: payload.indexName,
+    embedding_model: payload.embeddingModel,
+  });
+  if (payload.userId) {
+    params.set("user_id", payload.userId);
+  }
+  if (payload.roles) {
+    params.set("roles", payload.roles);
+  }
+  const response = await fetch(
+    buildApiUrl(`/documents/${encodeURIComponent(payload.documentId)}/permissions?${params}`),
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        visibility: payload.visibility,
+        owner_id: payload.ownerId || null,
+        allowed_departments: Array.isArray(payload.allowedDepartments)
+          ? payload.allowedDepartments
+          : payload.allowedDepartments
+            ? payload.allowedDepartments.split(",").map((item) => item.trim()).filter(Boolean)
+            : [],
+        allowed_roles: Array.isArray(payload.allowedRoles)
+          ? payload.allowedRoles
+          : payload.allowedRoles
+            ? payload.allowedRoles.split(",").map((item) => item.trim()).filter(Boolean)
+            : [],
+      }),
+    },
+  );
+  if (!response.ok) {
+    let message = "Permission update failed.";
     try {
       const data = await response.json();
       message = data.detail ?? message;

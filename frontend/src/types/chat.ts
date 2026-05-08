@@ -113,3 +113,7 @@ export interface DocumentDeleteResponse {
   status: string;
   deleted_chunks: number;
 }
+
+export interface DocumentPermissionUpdateResponse extends DocumentListItem {
+  updated_chunks: number;
+}

@@ -70,9 +70,32 @@ class DocumentIngestService:
         file_hash = self.calculate_file_hash(saved_path)
         duplicate = self.check_duplicate(db, file_hash)
         if duplicate and duplicate.status == "success":
-            task = self._create_task(db, task_id, duplicate.id, filename, "success", "duplicate", duplicate.chunk_count)
-            shutil.rmtree(saved_path.parent, ignore_errors=True)
-            return self._response(duplicate, task, status="already_exists", index_name=index_name, embedding_model=embedding_model)
+            self.update_document_permissions(
+                db,
+                duplicate,
+                visibility,
+                owner_id,
+                allowed_departments or [],
+                allowed_roles or [],
+            )
+            updated_chunks = self.search_service.update_chunk_permissions_by_doc_id(
+                index_name,
+                duplicate.id,
+                visibility=duplicate.visibility,
+                owner_id=duplicate.owner_id,
+                allowed_departments=parse_string_list(duplicate.allowed_departments),
+                allowed_roles=parse_string_list(duplicate.allowed_roles),
+            )
+            if updated_chunks > 0:
+                task = self._create_task(db, task_id, duplicate.id, filename, "success", "duplicate", duplicate.chunk_count)
+                shutil.rmtree(saved_path.parent, ignore_errors=True)
+                return self._response(
+                    duplicate,
+                    task,
+                    status="already_exists_permissions_updated",
+                    index_name=index_name,
+                    embedding_model=embedding_model,
+                )
 
         if duplicate:
             shutil.rmtree(saved_path.parent, ignore_errors=True)
@@ -250,6 +273,23 @@ class DocumentIngestService:
         if chunk_count is not None:
             document.chunk_count = chunk_count
         db.commit()
+
+    def update_document_permissions(
+        self,
+        db: Session,
+        document: Document,
+        visibility: str,
+        owner_id: str | None,
+        allowed_departments: list[str],
+        allowed_roles: list[str],
+    ) -> None:
+        document.visibility = visibility
+        document.owner_id = owner_id
+        document.allowed_departments = list_to_json(allowed_departments)
+        document.allowed_roles = list_to_json(allowed_roles)
+        document.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(document)
 
     def update_task_status(
         self,

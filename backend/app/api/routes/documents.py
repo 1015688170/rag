@@ -14,6 +14,8 @@ from app.schemas.knowledge import (
     DocumentDeleteResponse,
     DocumentListItem,
     DocumentListResponse,
+    DocumentPermissionUpdateRequest,
+    DocumentPermissionUpdateResponse,
     DocumentUploadResponse,
     IngestTaskResponse,
 )
@@ -87,6 +89,64 @@ async def list_documents(
     return DocumentListResponse(
         documents=[DocumentListItem.model_validate(doc, from_attributes=True) for doc in visible_documents]
     )
+
+
+@router.patch(
+    "/documents/{document_id}/permissions",
+    response_model=DocumentPermissionUpdateResponse,
+    summary="Update document permissions",
+)
+async def update_document_permissions(
+    document_id: str,
+    request: DocumentPermissionUpdateRequest,
+    index_name: str,
+    embedding_model: EmbeddingModel = EmbeddingModel.ada_002,
+    user_id: str | None = None,
+    roles: str | None = None,
+    db: Session = Depends(get_db),
+) -> DocumentPermissionUpdateResponse:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+    role_list = parse_string_list(roles)
+    if "admin" not in role_list and (not user_id or document.owner_id != user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to update this document.")
+
+    try:
+        visibility, owner_id, departments, allowed_roles = validate_document_permissions(
+            request.visibility,
+            request.owner_id,
+            request.allowed_departments,
+            request.allowed_roles,
+        )
+        document_ingest_service.update_document_permissions(
+            db,
+            document,
+            visibility,
+            owner_id,
+            departments,
+            allowed_roles,
+        )
+        resolved_index = search_service.resolve_index_name(embedding_model, index_name)
+        updated_chunks = search_service.update_chunk_permissions_by_doc_id(
+            resolved_index,
+            document.id,
+            visibility=document.visibility,
+            owner_id=document.owner_id,
+            allowed_departments=parse_string_list(document.allowed_departments),
+            allowed_roles=parse_string_list(document.allowed_roles),
+        )
+        return DocumentPermissionUpdateResponse(
+            **DocumentListItem.model_validate(document, from_attributes=True).model_dump(),
+            updated_chunks=updated_chunks,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Document permission update failed: {exc}",
+        ) from exc
 
 
 @router.get("/ingest-tasks/{task_id}", response_model=IngestTaskResponse, summary="Inspect an ingest task")

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { deleteDocument, fetchDocuments, fetchIngestTask, uploadDocument } from "../lib/api";
+import { deleteDocument, fetchDocuments, fetchIngestTask, updateDocumentPermissions, uploadDocument } from "../lib/api";
 import type { DocumentListItem, DocumentUploadResponse, EmbeddingModel, IngestTaskResponse } from "../types/chat";
 
 interface DocumentManagerProps {
@@ -15,6 +15,14 @@ const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
 
 function normalizeRolesText(text: string): string {
   return text.replace(/^roles?\s*[:：]\s*/i, "").trim();
+}
+
+function parseTextList(text: string): string[] {
+  return text
+    .replace(/^[^:：]+[:：]\s*/, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function formatSize(size: number): string {
@@ -125,6 +133,31 @@ export function DocumentManager({ selectedIndex, embeddingModel, userId, departm
       await loadDocuments();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Delete failed.");
+    }
+  }
+
+  async function handleUpdatePermissions(documentId: string) {
+    if (!selectedIndex) {
+      setStatus("请先选择 Azure AI Search 索引。");
+      return;
+    }
+    setStatus("正在更新文档权限...");
+    try {
+      const response = await updateDocumentPermissions({
+        documentId,
+        indexName: selectedIndex,
+        embeddingModel,
+        visibility,
+        ownerId: ownerId.trim() || undefined,
+        allowedDepartments: parseTextList(allowedDepartments),
+        allowedRoles: parseTextList(allowedRoles),
+        userId: userId.trim() || undefined,
+        roles: normalizeRolesText(rolesText) || undefined,
+      });
+      setStatus(`已更新权限，并同步 ${response.updated_chunks} 个 Azure Search 分片。`);
+      await loadDocuments();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "权限更新失败。");
     }
   }
 
@@ -271,6 +304,14 @@ export function DocumentManager({ selectedIndex, embeddingModel, userId, departm
                   <td className="px-4 py-3 text-slate-600">{formatDate(document.created_at)}</td>
                   <td className="max-w-[16rem] px-4 py-3 text-xs leading-5 text-red-600">{document.error_message}</td>
                   <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      disabled={document.status === "deleted" || isUploading}
+                      onClick={() => handleUpdatePermissions(document.id)}
+                      className="mb-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      应用权限
+                    </button>
                     <button
                       type="button"
                       disabled={document.status === "deleted" || isUploading}

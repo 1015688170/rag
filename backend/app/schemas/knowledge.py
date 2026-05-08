@@ -70,6 +70,22 @@ class DocumentListResponse(BaseModel):
     documents: list[DocumentListItem] = Field(default_factory=list)
 
 
+class DocumentPermissionUpdateRequest(BaseModel):
+    visibility: str = Field(default="public")
+    owner_id: str | None = None
+    allowed_departments: list[str] = Field(default_factory=list)
+    allowed_roles: list[str] = Field(default_factory=list)
+
+    @field_validator("allowed_departments", "allowed_roles", mode="before")
+    @classmethod
+    def parse_list_fields(cls, value: object) -> list[str]:
+        return parse_string_list(value)  # type: ignore[arg-type]
+
+
+class DocumentPermissionUpdateResponse(DocumentListItem):
+    updated_chunks: int
+
+
 class IngestTaskResponse(BaseModel):
     task_id: str
     document_id: str
