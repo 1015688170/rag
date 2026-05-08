@@ -57,6 +57,14 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function parseRoles(text: string): string[] {
+  return text
+    .replace(/^roles?\s*[:：]\s*/i, "")
+    .split(",")
+    .map((role) => role.trim())
+    .filter(Boolean);
+}
+
 function EmptyConversation({ onPickQuestion }: { onPickQuestion: (question: string) => void }) {
   return (
     <div className="flex min-h-[42vh] flex-col items-center justify-center px-6 py-12 text-center">
@@ -183,10 +191,7 @@ function App() {
         prompt_template: promptTemplate,
         user_id: userId.trim() || undefined,
         department: department.trim() || undefined,
-        roles: rolesText
-          .split(",")
-          .map((role) => role.trim())
-          .filter(Boolean),
+        roles: parseRoles(rolesText),
       });
 
       setMessages((current) => [

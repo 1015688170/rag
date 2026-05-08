@@ -80,7 +80,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-brand-100 via-white to-emerald-50" />
       <div className="relative flex h-full flex-col">
         <div className="border-b border-slate-200/80 px-5 pb-4 pt-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Global Settings</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">全局设置</p>
           <h1 className="mt-3 font-display text-[2rem] font-semibold text-ink">RAG 测试台</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">把实验参数收在左侧，右边专注问答和结果验证。</p>
         </div>
@@ -103,13 +103,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Selected index is used for retrieval and upload.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">当前索引用于检索和上传。</p>
                 <input
                   type="text"
                   value={props.newIndexName}
                   disabled={props.isLoading || props.isCreatingIndex}
                   onChange={(event) => props.onNewIndexNameChange(event.target.value)}
-                  placeholder="New index name to create"
+                  placeholder="新索引名称"
                   className="mt-3 w-full rounded-full border border-line bg-white px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
                 />
                 <button
@@ -118,7 +118,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onClick={props.onCreateIndex}
                   className="mt-3 w-full rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {props.isCreatingIndex ? "Creating..." : "Create index"}
+                  {props.isCreatingIndex ? "创建中..." : "创建索引"}
                 </button>
                 {props.indexCreateStatus ? (
                   <p className="mt-2 text-xs leading-5 text-slate-500">{props.indexCreateStatus}</p>
@@ -142,14 +142,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </section>
 
           <section className="rounded-2xl border border-line bg-white/85 p-3">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Current User</p>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">当前用户身份</p>
             <div className="mt-3 space-y-3">
               <input
                 type="text"
                 value={props.userId}
                 disabled={props.isLoading}
                 onChange={(event) => props.onUserIdChange(event.target.value)}
-                placeholder="user_id"
+                placeholder="用户ID，例如 alice"
                 className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
               />
               <input
@@ -157,7 +157,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 value={props.department}
                 disabled={props.isLoading}
                 onChange={(event) => props.onDepartmentChange(event.target.value)}
-                placeholder="department"
+                placeholder="部门，例如 sre"
                 className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
               />
               <input
@@ -165,7 +165,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 value={props.rolesText}
                 disabled={props.isLoading}
                 onChange={(event) => props.onRolesTextChange(event.target.value)}
-                placeholder="roles, comma separated"
+                placeholder="角色，例如 admin,oncall"
                 className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
