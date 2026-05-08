@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.chat import document_ingest_service, search_service
 from app.core.database import get_db
+from app.core.permissions import (
+    document_is_visible,
+    parse_string_list,
+    validate_document_permissions,
+)
 from app.models.knowledge import Document, IngestTask
 from app.schemas.chat import EmbeddingModel
 from app.schemas.knowledge import (
@@ -21,17 +26,35 @@ async def upload_document(
     file: UploadFile = File(...),
     index_name: str = Form(...),
     embedding_model: EmbeddingModel = Form(default=EmbeddingModel.ada_002),
+    visibility: str = Form("public"),
+    owner_id: str | None = Form(None),
+    allowed_departments: str = Form("[]"),
+    allowed_roles: str = Form("[]"),
     db: Session = Depends(get_db),
 ) -> DocumentUploadResponse:
     try:
+        departments = parse_string_list(allowed_departments)
+        roles = parse_string_list(allowed_roles)
+        visibility, owner_id, departments, roles = validate_document_permissions(
+            visibility,
+            owner_id,
+            departments,
+            roles,
+        )
         resolved_index = search_service.resolve_index_name(embedding_model, index_name)
         result = await document_ingest_service.ingest(
             db=db,
             file=file,
             index_name=resolved_index,
             embedding_model=embedding_model,
+            visibility=visibility,
+            owner_id=owner_id,
+            allowed_departments=departments,
+            allowed_roles=roles,
         )
         return DocumentUploadResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -40,9 +63,30 @@ async def upload_document(
 
 
 @router.get("/documents", response_model=DocumentListResponse, summary="List ingested documents")
-async def list_documents(db: Session = Depends(get_db)) -> DocumentListResponse:
-    documents = db.query(Document).order_by(Document.created_at.desc()).all()
-    return DocumentListResponse(documents=[DocumentListItem.model_validate(doc, from_attributes=True) for doc in documents])
+async def list_documents(
+    user_id: str | None = None,
+    department: str | None = None,
+    roles: str | None = None,
+    db: Session = Depends(get_db),
+) -> DocumentListResponse:
+    role_list = parse_string_list(roles)
+    documents = db.query(Document).filter(Document.status != "deleted").order_by(Document.created_at.desc()).all()
+    visible_documents = [
+        document
+        for document in documents
+        if document_is_visible(
+            visibility=document.visibility,
+            owner_id=document.owner_id,
+            allowed_departments=document.allowed_departments,
+            allowed_roles=document.allowed_roles,
+            user_id=user_id,
+            department=department,
+            roles=role_list,
+        )
+    ]
+    return DocumentListResponse(
+        documents=[DocumentListItem.model_validate(doc, from_attributes=True) for doc in visible_documents]
+    )
 
 
 @router.get("/ingest-tasks/{task_id}", response_model=IngestTaskResponse, summary="Inspect an ingest task")
@@ -68,6 +112,8 @@ async def delete_document(
     document_id: str,
     index_name: str,
     embedding_model: EmbeddingModel = EmbeddingModel.ada_002,
+    user_id: str | None = None,
+    roles: str | None = None,
     db: Session = Depends(get_db),
 ) -> DocumentDeleteResponse:
     document = db.query(Document).filter(Document.id == document_id).first()
@@ -75,6 +121,9 @@ async def delete_document(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     if document.status == "deleted":
         return DocumentDeleteResponse(document_id=document.id, status=document.status, deleted_chunks=0)
+    role_list = parse_string_list(roles)
+    if "admin" not in role_list and (not user_id or document.owner_id != user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to delete this document.")
 
     try:
         resolved_index = search_service.resolve_index_name(embedding_model, index_name)

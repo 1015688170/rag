@@ -201,6 +201,23 @@ pip install -r requirements.txt
 
 The existing `/api/chat` and `/api/rerank/status` endpoints remain available.
 
+### Document permission control
+
+This is the first version of document-level permission control, not a full authentication system. The frontend sends `user_id`, `department`, and `roles` only as test-time identity fields; production deployments should inject trusted identity from SSO, JWT validation, or an API gateway.
+
+Permission metadata is stored on `documents` in SQLite and on every Azure AI Search chunk:
+
+- `visibility`: `public`, `private`, `department`, or `role`.
+- `owner_id`: user id for owner checks.
+- `allowed_departments`: JSON array string in SQLite, string collection in Azure AI Search.
+- `allowed_roles`: JSON array string in SQLite, string collection in Azure AI Search.
+
+Chat retrieval uses an Azure AI Search `filter` so permission filtering happens during recall, not after chunks are returned to Python. Requests without identity fields can only retrieve `public` documents. Document listing uses the same visibility rules in SQLite for this first version; document deletion is allowed only for the owner or a caller with the `admin` role.
+
+Existing SQLite databases are migrated at startup after `Base.metadata.create_all(bind=engine)`: missing permission columns are added with `ALTER TABLE`. Alembic is not required for this version.
+
+Existing Azure AI Search indexes that do not include the permission fields should be recreated with the new schema and re-ingested. Azure AI Search does not always allow all schema changes to be safely added in place for old indexes.
+
 ### Create search index
 
 The UI provides a `Create index` button next to the Search Index selector. Use it to initialize the selected Azure AI Search index before uploading documents, instead of creating the schema manually in the Azure portal.
@@ -255,6 +272,10 @@ The create-index endpoint creates these fields, and the upload pipeline writes t
 | `page_end` | `Edm.Int32` | filterable/sortable |
 | `created_at` | `Edm.DateTimeOffset` or `Edm.String` | retrievable |
 | `file_hash` | `Edm.String` | filterable |
+| `visibility` | `Edm.String` | filterable |
+| `owner_id` | `Edm.String` | filterable |
+| `allowed_departments` | `Collection(Edm.String)` | filterable |
+| `allowed_roles` | `Collection(Edm.String)` | filterable |
 
 Deletion uses `doc_id eq '<document_id>'`, so `doc_id` must be filterable. RAG retrieval reads `id`, `filepath`, and `content`; uploaded chunks include those fields and can be retrieved by the existing chat flow after indexing.
 

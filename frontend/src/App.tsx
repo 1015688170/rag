@@ -92,6 +92,9 @@ function App() {
   const [isCreatingIndex, setIsCreatingIndex] = useState(false);
   const [indexCreateStatus, setIndexCreateStatus] = useState<string>();
   const [newIndexName, setNewIndexName] = useState("");
+  const [userId, setUserId] = useState("");
+  const [department, setDepartment] = useState("");
+  const [rolesText, setRolesText] = useState("");
   const [activeView, setActiveView] = useState<"chat" | "documents">("chat");
   const hasConversation = messages.length > 0;
 
@@ -178,6 +181,12 @@ function App() {
         top_k: topK,
         top_n: Math.min(topN, topK),
         prompt_template: promptTemplate,
+        user_id: userId.trim() || undefined,
+        department: department.trim() || undefined,
+        roles: rolesText
+          .split(",")
+          .map((role) => role.trim())
+          .filter(Boolean),
       });
 
       setMessages((current) => [
@@ -221,10 +230,16 @@ function App() {
           isCreatingIndex={isCreatingIndex}
           indexCreateStatus={indexCreateStatus}
           newIndexName={newIndexName}
+          userId={userId}
+          department={department}
+          rolesText={rolesText}
           onEmbeddingModelChange={handleEmbeddingModelChange}
           onChatModelChange={setChatModel}
           onSelectedIndexChange={setSelectedIndex}
           onNewIndexNameChange={setNewIndexName}
+          onUserIdChange={setUserId}
+          onDepartmentChange={setDepartment}
+          onRolesTextChange={setRolesText}
           onCreateIndex={handleCreateIndex}
           onTopKChange={(value) => {
             const nextTopK = clampNumber(value, 1, 20);
@@ -292,7 +307,13 @@ function App() {
             </>
           ) : (
             <div className="min-h-0 flex-1">
-              <DocumentManager selectedIndex={selectedIndex} embeddingModel={embeddingModel} />
+              <DocumentManager
+                selectedIndex={selectedIndex}
+                embeddingModel={embeddingModel}
+                userId={userId}
+                department={department}
+                rolesText={rolesText}
+              />
             </div>
           )}
         </main>

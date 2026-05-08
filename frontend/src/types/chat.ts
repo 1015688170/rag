@@ -3,6 +3,9 @@ export type ChatModel = "gpt-4o" | "claude-opus-4.5";
 
 export interface ChatRequest {
   question: string;
+  user_id?: string;
+  department?: string;
+  roles?: string[];
   index_name?: string;
   embedding_model: EmbeddingModel;
   chat_model: ChatModel;
@@ -67,6 +70,10 @@ export interface DocumentUploadResponse {
   file_hash: string;
   chunk_count: number;
   status: string;
+  visibility: string;
+  owner_id?: string | null;
+  allowed_departments: string[];
+  allowed_roles: string[];
 }
 
 export interface DocumentListItem {
@@ -77,6 +84,10 @@ export interface DocumentListItem {
   chunk_count: number;
   status: string;
   error_message?: string | null;
+  visibility: string;
+  owner_id?: string | null;
+  allowed_departments: string[];
+  allowed_roles: string[];
   created_at: string;
   updated_at: string;
 }

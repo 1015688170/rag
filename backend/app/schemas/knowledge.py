@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+from pydantic import field_validator
+
+from app.core.permissions import parse_string_list
 from app.schemas.chat import EmbeddingModel
 
 
@@ -31,6 +34,15 @@ class DocumentUploadResponse(BaseModel):
     status: str
     index_name: str | None = None
     embedding_model: EmbeddingModel | None = None
+    visibility: str
+    owner_id: str | None = None
+    allowed_departments: list[str] = Field(default_factory=list)
+    allowed_roles: list[str] = Field(default_factory=list)
+
+    @field_validator("allowed_departments", "allowed_roles", mode="before")
+    @classmethod
+    def parse_list_fields(cls, value: object) -> list[str]:
+        return parse_string_list(value)  # type: ignore[arg-type]
 
 
 class DocumentListItem(BaseModel):
@@ -41,8 +53,17 @@ class DocumentListItem(BaseModel):
     chunk_count: int
     status: str
     error_message: str | None = None
+    visibility: str
+    owner_id: str | None = None
+    allowed_departments: list[str] = Field(default_factory=list)
+    allowed_roles: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("allowed_departments", "allowed_roles", mode="before")
+    @classmethod
+    def parse_list_fields(cls, value: object) -> list[str]:
+        return parse_string_list(value)  # type: ignore[arg-type]
 
 
 class DocumentListResponse(BaseModel):

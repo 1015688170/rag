@@ -15,6 +15,9 @@ class ChatModel(str, Enum):
 
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000, description="User input question")
+    user_id: str | None = Field(default=None, description="Current user id for document permission filtering")
+    department: str | None = Field(default=None, description="Current user department for document permission filtering")
+    roles: list[str] = Field(default_factory=list, description="Current user roles for document permission filtering")
     index_name: str | None = Field(
         default=None,
         min_length=1,

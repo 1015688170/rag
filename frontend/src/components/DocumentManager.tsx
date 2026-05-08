@@ -6,6 +6,9 @@ import type { DocumentListItem, DocumentUploadResponse, EmbeddingModel, IngestTa
 interface DocumentManagerProps {
   selectedIndex: string;
   embeddingModel: EmbeddingModel;
+  userId: string;
+  department: string;
+  rolesText: string;
 }
 
 const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
@@ -24,18 +27,26 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleString();
 }
 
-export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManagerProps) {
+export function DocumentManager({ selectedIndex, embeddingModel, userId, department, rolesText }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [status, setStatus] = useState<string>();
   const [uploadResult, setUploadResult] = useState<DocumentUploadResponse>();
   const [task, setTask] = useState<IngestTaskResponse>();
+  const [visibility, setVisibility] = useState("public");
+  const [ownerId, setOwnerId] = useState("");
+  const [allowedDepartments, setAllowedDepartments] = useState("");
+  const [allowedRoles, setAllowedRoles] = useState("");
 
   async function loadDocuments(): Promise<DocumentListItem[]> {
     setIsLoading(true);
     try {
-      const response = await fetchDocuments();
+      const response = await fetchDocuments({
+        userId: userId.trim() || undefined,
+        department: department.trim() || undefined,
+        roles: rolesText.trim() || undefined,
+      });
       setDocuments(response.documents);
       return response.documents;
     } catch (error) {
@@ -48,7 +59,7 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
 
   useEffect(() => {
     loadDocuments();
-  }, []);
+  }, [userId, department, rolesText]);
 
   async function handleUpload(file: File) {
     if (!selectedIndex || isUploading) {
@@ -64,7 +75,15 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
     setTask(undefined);
     setUploadResult(undefined);
     try {
-      const response = await uploadDocument({ file, indexName: selectedIndex, embeddingModel });
+      const response = await uploadDocument({
+        file,
+        indexName: selectedIndex,
+        embeddingModel,
+        visibility,
+        ownerId: ownerId.trim() || undefined,
+        allowedDepartments: allowedDepartments.trim() || "[]",
+        allowedRoles: allowedRoles.trim() || "[]",
+      });
       setUploadResult(response);
       setStatus(`${response.filename}: ${response.status}, ${response.chunk_count} chunks.`);
       const taskResponse = await fetchIngestTask(response.task_id);
@@ -91,7 +110,13 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
     }
     setStatus("Deleting document...");
     try {
-      const response = await deleteDocument({ documentId, indexName: selectedIndex, embeddingModel });
+      const response = await deleteDocument({
+        documentId,
+        indexName: selectedIndex,
+        embeddingModel,
+        userId: userId.trim() || undefined,
+        roles: rolesText.trim() || undefined,
+      });
       setStatus(`Deleted ${response.deleted_chunks} chunks from Azure AI Search.`);
       await loadDocuments();
     } catch (error) {
@@ -121,6 +146,46 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
           <section className="rounded-2xl border border-line bg-white p-4">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Upload</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">Index: {selectedIndex || "Not selected"}</p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-medium text-slate-500">
+                Visibility
+                <select
+                  value={visibility}
+                  disabled={isUploading}
+                  onChange={(event) => setVisibility(event.target.value)}
+                  className="mt-1 w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-semibold text-ink outline-none focus:border-brand-500"
+                >
+                  <option value="public">public</option>
+                  <option value="private">private</option>
+                  <option value="department">department</option>
+                  <option value="role">role</option>
+                </select>
+              </label>
+              <input
+                type="text"
+                value={ownerId}
+                disabled={isUploading}
+                onChange={(event) => setOwnerId(event.target.value)}
+                placeholder="owner_id"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none placeholder:text-slate-400 focus:border-brand-500"
+              />
+              <input
+                type="text"
+                value={allowedDepartments}
+                disabled={isUploading}
+                onChange={(event) => setAllowedDepartments(event.target.value)}
+                placeholder="allowed_departments: sre,devops"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none placeholder:text-slate-400 focus:border-brand-500"
+              />
+              <input
+                type="text"
+                value={allowedRoles}
+                disabled={isUploading}
+                onChange={(event) => setAllowedRoles(event.target.value)}
+                placeholder="allowed_roles: admin,oncall"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none placeholder:text-slate-400 focus:border-brand-500"
+              />
+            </div>
             <label className="mt-4 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-8 text-center text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-white">
               <input
                 type="file"
@@ -153,6 +218,10 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
                   <dd>{uploadResult.chunk_count}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
+                  <dt>Visibility</dt>
+                  <dd>{uploadResult.visibility}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
                   <dt>Task</dt>
                   <dd className="max-w-[11rem] truncate">{uploadResult.task_id}</dd>
                 </div>
@@ -171,6 +240,7 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
                 <th className="px-4 py-3">Size</th>
                 <th className="px-4 py-3">Chunks</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Permission</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3">Error</th>
                 <th className="px-4 py-3" />
@@ -188,6 +258,12 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
                       {document.status}
                     </span>
                   </td>
+                  <td className="max-w-[16rem] px-4 py-3 text-xs leading-5 text-slate-600">
+                    <div className="font-semibold text-ink">{document.visibility}</div>
+                    <div>owner: {document.owner_id || "-"}</div>
+                    <div>dept: {document.allowed_departments.join(", ") || "-"}</div>
+                    <div>roles: {document.allowed_roles.join(", ") || "-"}</div>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{formatDate(document.created_at)}</td>
                   <td className="max-w-[16rem] px-4 py-3 text-xs leading-5 text-red-600">{document.error_message}</td>
                   <td className="px-4 py-3 text-right">
@@ -204,7 +280,7 @@ export function DocumentManager({ selectedIndex, embeddingModel }: DocumentManag
               ))}
               {documents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-500">
                     {isLoading ? "Loading..." : "No documents"}
                   </td>
                 </tr>

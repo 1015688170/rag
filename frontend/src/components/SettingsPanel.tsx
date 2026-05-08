@@ -12,10 +12,16 @@ interface SettingsPanelProps {
   isCreatingIndex: boolean;
   indexCreateStatus?: string;
   newIndexName: string;
+  userId: string;
+  department: string;
+  rolesText: string;
   onEmbeddingModelChange: (value: EmbeddingModel) => void;
   onChatModelChange: (value: ChatModel) => void;
   onSelectedIndexChange: (value: string) => void;
   onNewIndexNameChange: (value: string) => void;
+  onUserIdChange: (value: string) => void;
+  onDepartmentChange: (value: string) => void;
+  onRolesTextChange: (value: string) => void;
   onCreateIndex: () => void;
   onTopKChange: (value: number) => void;
   onTopNChange: (value: number) => void;
@@ -133,6 +139,36 @@ export function SettingsPanel(props: SettingsPanelProps) {
               options={chatOptions}
               onChange={props.onChatModelChange}
             />
+          </section>
+
+          <section className="rounded-2xl border border-line bg-white/85 p-3">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Current User</p>
+            <div className="mt-3 space-y-3">
+              <input
+                type="text"
+                value={props.userId}
+                disabled={props.isLoading}
+                onChange={(event) => props.onUserIdChange(event.target.value)}
+                placeholder="user_id"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <input
+                type="text"
+                value={props.department}
+                disabled={props.isLoading}
+                onChange={(event) => props.onDepartmentChange(event.target.value)}
+                placeholder="department"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <input
+                type="text"
+                value={props.rolesText}
+                disabled={props.isLoading}
+                onChange={(event) => props.onRolesTextChange(event.target.value)}
+                placeholder="roles, comma separated"
+                className="w-full rounded-full border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
           </section>
 
           <section className="rounded-2xl border border-line bg-white/85 p-3">

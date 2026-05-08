@@ -29,6 +29,9 @@ class ChatService:
             embedding_model=request.embedding_model,
             index_name=index_name,
             top_k=request.top_k,
+            user_id=request.user_id,
+            department=request.department,
+            roles=request.roles,
         )
         try:
             final_docs = self.rerank_service.rerank(

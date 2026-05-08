@@ -89,6 +89,18 @@ class SearchService:
                 SimpleField(name="page_end", type=SearchFieldDataType.Int32, filterable=True, sortable=True),
                 SimpleField(name="created_at", type=SearchFieldDataType.String, filterable=True, sortable=True),
                 SimpleField(name="file_hash", type=SearchFieldDataType.String, filterable=True),
+                SimpleField(name="visibility", type=SearchFieldDataType.String, filterable=True),
+                SimpleField(name="owner_id", type=SearchFieldDataType.String, filterable=True),
+                SearchField(
+                    name="allowed_departments",
+                    type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+                    filterable=True,
+                ),
+                SearchField(
+                    name="allowed_roles",
+                    type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+                    filterable=True,
+                ),
             ],
             vector_search=VectorSearch(
                 algorithms=[HnswAlgorithmConfiguration(name=vector_algorithm_name)],
@@ -180,6 +192,9 @@ class SearchService:
         embedding_model: EmbeddingModel,
         index_name: str | None = None,
         top_k: int = 10,
+        user_id: str | None = None,
+        department: str | None = None,
+        roles: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         from azure.core.credentials import AzureKeyCredential
         from azure.search.documents import SearchClient
@@ -200,6 +215,7 @@ class SearchService:
         results = client.search(
             search_text=query_text,
             vector_queries=[vector_query],
+            filter=self._permission_filter(user_id=user_id, department=department, roles=roles),
             select=["id", "filepath", "content"],
             top=top_k,
         )
@@ -216,3 +232,37 @@ class SearchService:
                 }
             )
         return documents
+
+    def _permission_filter(
+        self,
+        user_id: str | None = None,
+        department: str | None = None,
+        roles: list[str] | None = None,
+    ) -> str:
+        clauses = ["visibility eq 'public'"]
+        normalized_user_id = user_id.strip() if user_id and user_id.strip() else None
+        normalized_department = department.strip() if department and department.strip() else None
+        normalized_roles: list[str] = []
+        seen_roles: set[str] = set()
+        for role in roles or []:
+            normalized_role = str(role).strip()
+            if not normalized_role or normalized_role in seen_roles:
+                continue
+            seen_roles.add(normalized_role)
+            normalized_roles.append(normalized_role)
+
+        if normalized_user_id:
+            clauses.append(f"owner_id eq '{self._escape_odata_string(normalized_user_id)}'")
+        if normalized_department:
+            clauses.append(
+                "allowed_departments/any(d: "
+                f"d eq '{self._escape_odata_string(normalized_department)}'"
+                ")"
+            )
+        if normalized_roles:
+            escaped_roles = ",".join(self._escape_odata_string(role) for role in normalized_roles)
+            clauses.append(f"allowed_roles/any(r: search.in(r, '{escaped_roles}'))")
+        return " or ".join(clauses)
+
+    def _escape_odata_string(self, value: str) -> str:
+        return value.replace("'", "''")

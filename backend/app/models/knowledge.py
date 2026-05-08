@@ -20,6 +20,10 @@ class Document(Base):
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(String, nullable=False, default="public")
+    owner_id: Mapped[str | None] = mapped_column(String)
+    allowed_departments: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    allowed_roles: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

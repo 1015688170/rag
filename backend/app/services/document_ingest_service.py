@@ -14,6 +14,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import UPLOAD_DIR
+from app.core.permissions import list_to_json, parse_string_list
 from app.models.knowledge import Document, IngestTask
 from app.schemas.chat import EmbeddingModel
 from app.services.embedding_service import EmbeddingService
@@ -57,6 +58,10 @@ class DocumentIngestService:
         file: UploadFile,
         index_name: str,
         embedding_model: EmbeddingModel,
+        visibility: str = "public",
+        owner_id: str | None = None,
+        allowed_departments: list[str] | None = None,
+        allowed_roles: list[str] | None = None,
     ) -> dict:
         filename = self.validate_file(file)
         document_id = uuid.uuid4().hex
@@ -74,7 +79,19 @@ class DocumentIngestService:
             document = duplicate
             task = self._create_task(db, task_id, document.id, document.filename, "pending", "saved", 0)
         else:
-            document, task = self._create_document_and_task(db, document_id, task_id, filename, saved_path, file_hash, file_size)
+            document, task = self._create_document_and_task(
+                db,
+                document_id,
+                task_id,
+                filename,
+                saved_path,
+                file_hash,
+                file_size,
+                visibility,
+                owner_id,
+                allowed_departments or [],
+                allowed_roles or [],
+            )
 
         try:
             self.update_document_status(db, document, "parsing")
@@ -208,6 +225,10 @@ class DocumentIngestService:
                     "page_end": chunk.page_end,
                     "created_at": created_at,
                     "file_hash": document.file_hash,
+                    "visibility": document.visibility,
+                    "owner_id": document.owner_id,
+                    "allowed_departments": parse_string_list(document.allowed_departments),
+                    "allowed_roles": parse_string_list(document.allowed_roles),
                 }
             )
         return indexed_chunks
@@ -485,6 +506,10 @@ class DocumentIngestService:
         saved_path: Path,
         file_hash: str,
         file_size: int,
+        visibility: str,
+        owner_id: str | None,
+        allowed_departments: list[str],
+        allowed_roles: list[str],
     ) -> tuple[Document, IngestTask]:
         now = datetime.utcnow()
         document = Document(
@@ -497,6 +522,10 @@ class DocumentIngestService:
             chunk_count=0,
             status="pending",
             error_message=None,
+            visibility=visibility,
+            owner_id=owner_id,
+            allowed_departments=list_to_json(allowed_departments),
+            allowed_roles=list_to_json(allowed_roles),
             created_at=now,
             updated_at=now,
         )
@@ -562,6 +591,10 @@ class DocumentIngestService:
             "status": status or document.status,
             "index_name": index_name,
             "embedding_model": embedding_model,
+            "visibility": document.visibility,
+            "owner_id": document.owner_id,
+            "allowed_departments": parse_string_list(document.allowed_departments),
+            "allowed_roles": parse_string_list(document.allowed_roles),
         }
 
     def _safe_filename(self, filename: str) -> str:

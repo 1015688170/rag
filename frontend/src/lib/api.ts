@@ -80,11 +80,21 @@ export async function uploadDocument(payload: {
   file: File;
   indexName: string;
   embeddingModel: EmbeddingModel;
+  visibility?: string;
+  ownerId?: string;
+  allowedDepartments?: string;
+  allowedRoles?: string;
 }): Promise<DocumentUploadResponse> {
   const formData = new FormData();
   formData.append("file", payload.file);
   formData.append("index_name", payload.indexName);
   formData.append("embedding_model", payload.embeddingModel);
+  formData.append("visibility", payload.visibility || "public");
+  if (payload.ownerId) {
+    formData.append("owner_id", payload.ownerId);
+  }
+  formData.append("allowed_departments", payload.allowedDepartments || "[]");
+  formData.append("allowed_roles", payload.allowedRoles || "[]");
 
   const response = await fetch(buildApiUrl("/documents/upload"), {
     method: "POST",
@@ -111,8 +121,23 @@ export async function uploadDocument(payload: {
   return response.json();
 }
 
-export async function fetchDocuments(): Promise<DocumentListResponse> {
-  const response = await fetch(buildApiUrl("/documents"));
+export async function fetchDocuments(payload?: {
+  userId?: string;
+  department?: string;
+  roles?: string;
+}): Promise<DocumentListResponse> {
+  const params = new URLSearchParams();
+  if (payload?.userId) {
+    params.set("user_id", payload.userId);
+  }
+  if (payload?.department) {
+    params.set("department", payload.department);
+  }
+  if (payload?.roles) {
+    params.set("roles", payload.roles);
+  }
+  const query = params.toString();
+  const response = await fetch(buildApiUrl(`/documents${query ? `?${query}` : ""}`));
   if (!response.ok) {
     throw new Error(response.statusText || "Failed to fetch documents.");
   }
@@ -131,11 +156,19 @@ export async function deleteDocument(payload: {
   documentId: string;
   indexName: string;
   embeddingModel: EmbeddingModel;
+  userId?: string;
+  roles?: string;
 }): Promise<DocumentDeleteResponse> {
   const params = new URLSearchParams({
     index_name: payload.indexName,
     embedding_model: payload.embeddingModel,
   });
+  if (payload.userId) {
+    params.set("user_id", payload.userId);
+  }
+  if (payload.roles) {
+    params.set("roles", payload.roles);
+  }
   const response = await fetch(buildApiUrl(`/documents/${encodeURIComponent(payload.documentId)}?${params}`), {
     method: "DELETE",
   });
