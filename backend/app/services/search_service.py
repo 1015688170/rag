@@ -257,21 +257,48 @@ class SearchService:
             search_text=query_text,
             vector_queries=[vector_query],
             filter=self._permission_filter(user_id=user_id, department=department, roles=roles),
-            select=["id", "filepath", "content"],
+            select=[
+                "id",
+                "doc_id",
+                "chunk_id",
+                "chunk_index",
+                "filename",
+                "filepath",
+                "section_title",
+                "section_path",
+                "source_type",
+                "content",
+                "page_start",
+                "page_end",
+            ],
             top=top_k,
         )
 
         documents: list[dict[str, Any]] = []
         for row in results:
             recall_score = row.get("@search.score")
-            documents.append(
-                {
-                    "doc_id": str(row.get("id", "")),
-                    "filepath": str(row.get("filepath", "unknown")),
-                    "content": str(row.get("content", "")),
-                    "recall_score": float(recall_score) if recall_score is not None else None,
-                }
-            )
+            document = {
+                "doc_id": str(row.get("id", "")),
+                "filepath": str(row.get("filepath", "unknown")),
+                "content": str(row.get("content", "")),
+                "recall_score": float(recall_score) if recall_score is not None else None,
+            }
+            for field_name in (
+                "source_doc_id",
+                "chunk_id",
+                "chunk_index",
+                "filename",
+                "section_title",
+                "section_path",
+                "source_type",
+                "page_start",
+                "page_end",
+            ):
+                row_field_name = "doc_id" if field_name == "source_doc_id" else field_name
+                value = row.get(row_field_name)
+                if value is not None:
+                    document[field_name] = value
+            documents.append(document)
         return documents
 
     def _permission_filter(

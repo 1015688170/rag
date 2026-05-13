@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
@@ -10,6 +12,7 @@ from app.services.llm_service import LLMService
 from app.services.rerank_service import RerankService
 from app.services.search_service import SearchService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 embedding_service = EmbeddingService(settings)
@@ -32,9 +35,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
     try:
         return await chat_service.chat(request)
     except Exception as exc:
+        logger.exception("RAG pipeline failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"RAG pipeline failed: {exc}",
+            detail="RAG pipeline failed.",
         ) from exc
 
 
@@ -52,6 +56,6 @@ async def list_indexes() -> IndexListResponse:
     try:
         indexes = search_service.list_indexes()
     except Exception:
+        logger.exception("Failed to list Azure AI Search indexes")
         indexes = sorted({index for index in defaults.values() if index})
     return IndexListResponse(indexes=indexes, defaults=defaults)
-

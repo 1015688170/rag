@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
@@ -13,6 +13,14 @@ if TYPE_CHECKING:
     from app.services.llm_service import LLMService
     from app.services.rerank_service import RerankService
     from app.services.search_service import SearchService
+
+
+class RagState(TypedDict, total=False):
+    request: ChatRequest
+    index_name: str
+    documents: list[Document]
+    raw_docs: list[dict[str, Any]]
+    reranked_docs: list[dict[str, Any]]
 
 
 NO_RETRIEVAL_ANSWER = "抱歉，当前知识库中未检索到相关片段，无法生成可信回答。"
@@ -49,7 +57,7 @@ class RagChain:
     def invoke(self, request: ChatRequest) -> ChatResponse:
         return self.chain.invoke({"request": request})
 
-    def _retrieve_step(self, state: dict[str, Any]) -> dict[str, Any]:
+    def _retrieve_step(self, state: RagState) -> RagState:
         request: ChatRequest = state["request"]
         index_name = self.retriever.resolve_index_name(request.embedding_model, request.index_name)
         documents = self.retriever.retrieve(
@@ -67,7 +75,7 @@ class RagChain:
             "documents": documents,
         }
 
-    def _rerank_step(self, state: dict[str, Any]) -> dict[str, Any]:
+    def _rerank_step(self, state: RagState) -> RagState:
         request: ChatRequest = state["request"]
         raw_docs = [self._document_to_source_doc(document) for document in state["documents"]]
         try:
@@ -84,7 +92,7 @@ class RagChain:
             "reranked_docs": final_docs,
         }
 
-    def _answer_step(self, state: dict[str, Any]) -> ChatResponse:
+    def _answer_step(self, state: RagState) -> ChatResponse:
         request: ChatRequest = state["request"]
         index_name: str = state["index_name"]
         reranked_docs: list[dict[str, Any]] = state["reranked_docs"]

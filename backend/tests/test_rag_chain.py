@@ -49,6 +49,11 @@ class FakeRerankService:
         return ranked
 
 
+class FailingRerankService(FakeRerankService):
+    def rerank(self, query: str, docs: list[dict], top_n: int = 5) -> list[dict]:
+        raise RuntimeError("rerank stack broke")
+
+
 class FakeLLMService:
     def __init__(self) -> None:
         self.calls = 0
@@ -147,3 +152,59 @@ def test_rag_chain_filters_by_rerank_threshold_and_refuses_generation() -> None:
     assert response.source_count == 1
     assert response.sources[0].rerank_score == 0.2
     assert llm_service.calls == 0
+
+
+def test_rag_chain_generates_answer_with_high_rerank_score() -> None:
+    llm_service = FakeLLMService()
+    chain = RagChain(
+        embedding_service=FakeEmbeddingService(),
+        search_service=FakeSearchService(
+            rows=[
+                {
+                    "doc_id": "chunk-1",
+                    "filepath": "runbook.md",
+                    "content": "rollback command",
+                    "recall_score": 3.0,
+                    "section_title": "Rollback",
+                    "source_type": "md",
+                }
+            ]
+        ),
+        rerank_service=FakeRerankService(min_score=0.5),
+        llm_service=llm_service,
+    )
+
+    response = chain.invoke(ChatRequest(question="how to rollback", index_name="ops-index"))
+
+    assert response.answer == "answer from 1 chunks"
+    assert response.source_count == 1
+    assert response.sources[0].score_source == "rerank"
+    assert response.sources[0].rerank_score == 0.8
+    assert llm_service.calls == 1
+
+
+def test_rag_chain_falls_back_to_recall_when_rerank_raises() -> None:
+    llm_service = FakeLLMService()
+    chain = RagChain(
+        embedding_service=FakeEmbeddingService(),
+        search_service=FakeSearchService(
+            rows=[
+                {
+                    "doc_id": "chunk-1",
+                    "filepath": "runbook.md",
+                    "content": "fallback content",
+                    "recall_score": 2.0,
+                }
+            ]
+        ),
+        rerank_service=FailingRerankService(),
+        llm_service=llm_service,
+    )
+
+    response = chain.invoke(ChatRequest(question="fallback", index_name="ops-index"))
+
+    assert response.answer == "answer from 1 chunks"
+    assert response.sources[0].score == 2.0
+    assert response.sources[0].rerank_score is None
+    assert response.sources[0].score_source == "recall"
+    assert llm_service.calls == 1

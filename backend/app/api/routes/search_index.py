@@ -1,8 +1,11 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.routes.chat import search_service
 from app.schemas.knowledge import SearchIndexCreateRequest, SearchIndexCreateResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["search-index"])
 
 
@@ -14,8 +17,11 @@ async def create_search_index(request: SearchIndexCreateRequest = SearchIndexCre
             index_name=request.index_name,
         )
         return SearchIndexCreateResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Search index creation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search index creation failed: {exc}",
+            detail="Search index creation failed.",
         ) from exc

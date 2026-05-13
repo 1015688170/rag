@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,7 @@ from app.schemas.knowledge import (
     IngestTaskResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["documents"])
 
 
@@ -58,9 +61,10 @@ async def upload_document(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Document upload failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document upload failed: {exc}",
+            detail="Document upload failed.",
         ) from exc
 
 
@@ -143,9 +147,10 @@ async def update_document_permissions(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Document permission update failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document permission update failed: {exc}",
+            detail="Document permission update failed.",
         ) from exc
 
 
@@ -191,7 +196,8 @@ async def delete_document(
         document_ingest_service.update_document_status(db, document, "deleted")
         return DocumentDeleteResponse(document_id=document.id, status="deleted", deleted_chunks=deleted_chunks)
     except Exception as exc:
+        logger.exception("Document deletion failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document deletion failed: {exc}",
+            detail="Document deletion failed.",
         ) from exc
