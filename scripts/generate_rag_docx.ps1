@@ -58,7 +58,7 @@ foreach ($line in $content) {
     }
 
     if ($line.StartsWith("- ")) {
-        $paragraphs.Add((New-ParagraphXml ("• " + $line.Substring(2))))
+        $paragraphs.Add((New-ParagraphXml ("- " + $line.Substring(2))))
         continue
     }
 

@@ -16,6 +16,7 @@ __pycache__/
 venv/
 env/
 backend/.venv/
+.uv-cache/
 
 # RAG document storage
 backend/storage/uploads/
