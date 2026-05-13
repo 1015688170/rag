@@ -50,6 +50,7 @@ pip install -r /opt/swp-rag-workbench/current/backend/requirements.txt
 ```
 
 `backend/requirements.txt` 已固定 Rerank 兼容版本，避免 `FlagEmbedding` 与 `transformers` 新版本不兼容导致重排失效。
+当前版本的 RAG 编排层依赖 `langchain-core`，已经写入 `backend/requirements.txt`；服务器更新代码后必须重新执行 `pip install -r backend/requirements.txt`，否则后端启动时会报 `ModuleNotFoundError: No module named 'langchain_core'`。
 
 ## 5. 下载 Rerank 模型
 
@@ -224,12 +225,17 @@ cd /opt/swp-rag-workbench/current
 git pull
 source /opt/swp-rag-workbench/venv/bin/activate
 pip install -r backend/requirements.txt
+cd backend
+python -m pytest tests
+cd ..
 cd frontend
 npm ci || npm install
 npm run build
 sudo systemctl restart swp-rag-backend
 sudo systemctl reload nginx
 ```
+
+如果只是部署 Issue 2 的 LangChain RAG Chain 改动，不需要新增环境变量，也不需要重建 Azure AI Search 索引；更新代码、重装后端依赖、重启 `swp-rag-backend` 即可。
 
 ## 14. 排查 Rerank
 
