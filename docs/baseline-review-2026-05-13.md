@@ -1,9 +1,10 @@
-# RAG 平台基线审查报告
+# RAG 平台审查报告（两轮）
 
 **项目**: https://github.com/1015688170/rag  
-**分支**: `main`（当前唯一分支，无 PR）  
-**审查日期**: 2026-05-13  
-**审查范围**: 全仓代码，不做修改，只做架构分析与建议  
+**分支**: `main`  
+**第一轮审查**: 2026-05-13 — 基线审查（commit `39d75b4`）  
+**第二轮审查**: 2026-05-13 — Codex 修改验证（commit `b422dbc`）  
+**审查范围**: 全仓代码，按公司级 RAG 平台架构标准审查  
 
 ---
 
@@ -334,3 +335,186 @@ except Exception:
 3. 补齐测试覆盖（P2 工程化）
 
 后续引入 LangGraph、评估、观测的架构基础已经打好，不需要对现有 service 层做任何破坏性修改。
+
+---
+
+---
+
+# 第二轮审查：Codex 修改验证
+
+**对比基线**: `39d75b4`（基线报告提交）→ `b422dbc`（Codex 修改）  
+**变更范围**: 9 个文件，+187 / -19 行  
+
+```
+backend/app/api/routes/chat.py           |  8 +++--
+backend/app/api/routes/documents.py      | 12 +++++--
+backend/app/api/routes/search_index.py   |  8 ++++-
+backend/app/rag/chains/rag_chain.py      | 16 ++++++---
+backend/app/services/search_service.py   | 45 ++++++++++++++++++-----
+backend/tests/conftest.py                |  4 +++
+backend/tests/test_api_error_handling.py | 24 +++++++++++++ (new)
+backend/tests/test_rag_chain.py          | 61 ++++++++++++++++++++++++++++++++
+backend/tests/test_search_service.py     | 28 +++++++++++++++ (new)
+```
+
+---
+
+## 逐项审查结果
+
+### 1. `/api/chat` 兼容性 — ✅ 保持兼容
+
+`ChatRequest` / `ChatResponse` schema 未变。`rag_chain.py` 中新增的 `RagState` TypedDict 是内部实现细节，不影响 API 合约。
+
+### 2. LangChain 编排层 — ✅ 改善，引入 RagState TypedDict
+
+`rag_chain.py:18-23` 新增：
+```python
+class RagState(TypedDict, total=False):
+    request: ChatRequest
+    index_name: str
+    documents: list[Document]
+    raw_docs: list[dict[str, Any]]
+    reranked_docs: list[dict[str, Any]]
+```
+
+三步方法的签名从 `dict[str, Any]` → `RagState`。`total=False` 合理——state 是逐步构造的。
+
+**小问题**：`_retrieve_step` 返回 `{**state, "index_name": ..., "documents": ...}` 时 mypy/pyright 会报 "RagState 不支持 `**` 展开"。运行时没问题，但静态类型检查器会警告。后续可改为显式构造每个 key。
+
+### 3. Retriever 返回 `Document` — ✅ 未改动，基线已通过
+
+### 4. 权限过滤在 Azure AI Search 查询阶段 — ✅ 不变，增强测试
+
+`_permission_filter()` 逻辑未改，新增了独立单元测试 `test_search_service.py`：
+
+| 测试 | 覆盖 |
+|---|---|
+| `test_permission_filter_defaults_to_public_only` | 无身份时仅 public |
+| `test_permission_filter_escapes_and_deduplicates_identity_fields` | SQL 注入防护 + 去重 |
+
+第二个测试包含 `alice'o` → `alice''o`、`on'call` → `on''call` 的 OData escape 验证，以及 `["admin", "admin", ...]` 的去重验证。测试质量好。
+
+### 5. Rerank 阈值拒答 — ✅ 未改动，基线已通过
+
+### 6. 异常处理 — ✅ P0 已修复
+
+5 处异常泄露全部修复：
+
+| 文件 | 修改 |
+|---|---|
+| `chat.py:35-39` | `f"RAG pipeline failed: {exc}"` → `"RAG pipeline failed."` + `logger.exception()` |
+| `documents.py:61-65` | `f"Document upload failed: {exc}"` → `"Document upload failed."` + `logger.exception()` |
+| `documents.py:147-151` | `f"Document permission update failed: {exc}"` → `"Document permission update failed."` + `logger.exception()` |
+| `documents.py:196-200` | `f"Document deletion failed: {exc}"` → `"Document deletion failed."` + `logger.exception()` |
+| `search_index.py:17-21` | `f"Search index creation failed: {exc}"` → `"Search index creation failed."` + `logger.exception()` |
+
+额外改进：
+- `search_index.py` 新增了 `ValueError` 单独 catch 返回 400（区分参数校验错误和服务器错误）
+- `list_indexes` 的 `except Exception` 也加了 `logger.exception("Failed to list Azure AI Search indexes")`
+- 新增 `test_api_error_handling.py` 验证异常不泄露："secret endpoint https://internal.example.invalid" 被拦截在通用错误消息之后
+
+### 7. 单元测试 — ✅ 显著改善，从 3 个增至 8 个
+
+| 测试（新增标记*） | 覆盖路径 |
+|---|---|
+| `test_azure_search_retriever_returns_documents` | Retriever → Document |
+| `test_rag_chain_refuses_when_retrieval_is_empty` | 空检索拒答 |
+| `test_rag_chain_filters_by_rerank_threshold_and_refuses_generation` | 低分拒答 |
+| `test_rag_chain_generates_answer_with_high_rerank_score` * | Golden path：检索→rerank→生成 |
+| `test_rag_chain_falls_back_to_recall_when_rerank_raises` * | Rerank 异常 → recall 降级 |
+| `test_chat_route_does_not_expose_raw_exception` * | API 异常不泄露 |
+| `test_permission_filter_defaults_to_public_only` * | 权限过滤默认值 |
+| `test_permission_filter_escapes_and_deduplicates_identity_fields` * | OData 转义 + 去重 |
+
+**Golden path 测试**（`test_rag_chain.py:155-177`）：确认了完整链路 `search → rerank → generate`、`llm_service.calls == 1`、source 包含 `section_title` 和 `source_type`。
+
+**Rerank 降级测试**（`test_rag_chain.py:180-213`）：通过 `FailingRerankService` 模拟 rerank 异常，验证降级到 recall score、`rerank_score is None`、`score_source == "recall"`。
+
+### 8. SearchService select 字段扩展 — ✅ 改善，有一个命名问题
+
+`search_service.py:260-273` select 从 3 个字段扩展到 12 个：
+```
+id, doc_id, chunk_id, chunk_index, filename, filepath,
+section_title, section_path, source_type, content, page_start, page_end
+```
+
+metadata 填充逻辑（行 286-300）使用映射：
+```python
+row_field_name = "doc_id" if field_name == "source_doc_id" else field_name
+```
+
+**⚠️ 命名混淆**：返回 dict 中 `doc_id` 来自 `row["id"]`（chunk 主键），而 `source_doc_id` 来自 `row["doc_id"]`（父文档 ID）。`doc_id` 这个名称暗示它是文档 ID，但实际存储的是 chunk ID。这是原始代码遗留问题，Codex 未修正，但不影响正确性。
+
+---
+
+## 第二轮发现的问题
+
+### ⚠️ P1 — 测试依赖缺失
+
+`test_api_error_handling.py:15` 使用 `@pytest.mark.anyio`，但 `requirements.txt` 中**没有 `anyio` 或 `pytest-asyncio` 包**。
+
+pytest 会报 `Unknown marker: anyio` 警告，且 async 测试函数无法正确执行。需要在 `requirements.txt` 中添加：
+```
+pytest-asyncio
+```
+
+或者改用同步测试（不需要 `await`，直接用 `asyncio.run()`）：
+
+```python
+import asyncio
+
+def test_chat_route_does_not_expose_raw_exception(monkeypatch) -> None:
+    monkeypatch.setattr(chat_route, "chat_service", FailingChatService())
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(chat_route.chat(ChatRequest(question="will fail")))
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "RAG pipeline failed."
+```
+
+### 🟡 P2 — RagState 的 `**state` 展开与 TypedDict 不兼容
+
+`rag_chain.py:72-76` 等处使用 `{**state, "index_name": index_name, ...}` 返回。TypedDict 不支持 `**` 解包的类型推断，mypy/pyright 会报错。后续可改为显式构造：
+
+```python
+return {
+    "request": state["request"],
+    "index_name": index_name,
+    "documents": documents,
+}
+```
+
+### 🟡 P2 — `_document_to_source_doc` 正确传递了新增字段
+
+`rag_chain.py:141-144` 的 `_document_to_source_doc` 方法通过 `**document.metadata` 展开会正确传递 `SearchService.search()` 的新字段（`section_title`、`source_type` 等），因为它们在 `AzureSearchRetriever._to_document()` 中被放入了 `Document.metadata`。但 `RerankService.rerank()` 只使用 `doc["content"]` 进行 rerank，不会用到新字段——行为正确。
+
+### 🟢 P3 — `conftest.py` 的 env var 时机
+
+`conftest.py:8-9` 在 `sys.path` 修正之后才设置环境变量。如果 Settings 在 import chain 中被提前实例化（如 `from app.core.config import settings` 触发模块级实例化），则 env var 设置太晚。当前测试中通过 fake services 避免了 Settings 实例化，所以没问题，但如果后续测试直接 `from app.core.config import settings` 就会在 import 时触发 pydantic-settings 校验失败。
+
+---
+
+## 两轮对比总结
+
+| 审查项 | 第一轮（基线） | 第二轮（Codex 修改） |
+|---|---|---|
+| `/api/chat` 兼容 | ✅ | ✅ 不变 |
+| LangChain 侵入度 | ✅ 适度 | ✅ 新增 RagState TypedDict |
+| Document 返回 | ✅ | ✅ 不变 |
+| 权限过滤位置 | ✅ | ✅ 新增独立测试 |
+| Rerank 拒答 | ✅ | ✅ 不变 |
+| 异常泄露 | ❌ P0（5 处） | ✅ **已修复** |
+| 单元测试 | ⚠️ 3 个 | ✅ 8 个（+golden path, +降级, +权限, +异常拦截） |
+| Search select 字段 | ⚠️ 3 字段 | ✅ 12 字段（+section_title, +source_type 等） |
+| State 类型安全 | ❌ `dict[str, Any]` | ✅ `RagState(TypedDict)` |
+| 测试依赖 | — | ⚠️ 缺 `pytest-asyncio` |
+
+## 最终结论
+
+**Codex 修改质量：好。** 精准命中了基线报告中的 P0（异常泄露）和主要 P1（TypedDict、select 字段、测试覆盖）问题。无新增 bug，无过度重构，无破坏性变更。
+
+**剩余待处理（非阻塞）：**
+1. `requirements.txt` 添加 `pytest-asyncio` 或改用 `asyncio.run()`（P1）
+2. RagState 的 `**state` 展开改为显式构造（P2，类型检查器兼容）
+3. `search_service.py` 返回 dict 中 `doc_id` vs `source_doc_id` 命名澄清（P2，不影响正确性）
+
+第二轮修改已达到可合并标准。
