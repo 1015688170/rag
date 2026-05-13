@@ -70,7 +70,7 @@ class RagChain:
             roles=request.roles,
         )
         return {
-            **state,
+            "request": request,
             "index_name": index_name,
             "documents": documents,
         }
@@ -87,7 +87,9 @@ class RagChain:
         except Exception:
             final_docs = self._fallback_to_recall_docs(raw_docs, request.top_n)
         return {
-            **state,
+            "request": request,
+            "index_name": state["index_name"],
+            "documents": state["documents"],
             "raw_docs": raw_docs,
             "reranked_docs": final_docs,
         }

@@ -276,30 +276,35 @@ class SearchService:
 
         documents: list[dict[str, Any]] = []
         for row in results:
-            recall_score = row.get("@search.score")
-            document = {
-                "doc_id": str(row.get("id", "")),
-                "filepath": str(row.get("filepath", "unknown")),
-                "content": str(row.get("content", "")),
-                "recall_score": float(recall_score) if recall_score is not None else None,
-            }
-            for field_name in (
-                "source_doc_id",
-                "chunk_id",
-                "chunk_index",
-                "filename",
-                "section_title",
-                "section_path",
-                "source_type",
-                "page_start",
-                "page_end",
-            ):
-                row_field_name = "doc_id" if field_name == "source_doc_id" else field_name
-                value = row.get(row_field_name)
-                if value is not None:
-                    document[field_name] = value
-            documents.append(document)
+            documents.append(self._search_row_to_document(row))
         return documents
+
+    def _search_row_to_document(self, row: Any) -> dict[str, Any]:
+        recall_score = row.get("@search.score")
+        document = {
+            # API compatibility: SourceItem.doc_id historically carries the Azure Search chunk key.
+            # The parent knowledge document id is exposed separately as source_doc_id.
+            "doc_id": str(row.get("id", "")),
+            "filepath": str(row.get("filepath", "unknown")),
+            "content": str(row.get("content", "")),
+            "recall_score": float(recall_score) if recall_score is not None else None,
+        }
+        for field_name in (
+            "source_doc_id",
+            "chunk_id",
+            "chunk_index",
+            "filename",
+            "section_title",
+            "section_path",
+            "source_type",
+            "page_start",
+            "page_end",
+        ):
+            row_field_name = "doc_id" if field_name == "source_doc_id" else field_name
+            value = row.get(row_field_name)
+            if value is not None:
+                document[field_name] = value
+        return document
 
     def _permission_filter(
         self,
