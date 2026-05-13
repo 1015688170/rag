@@ -165,8 +165,11 @@ def test_rag_chain_generates_answer_with_high_rerank_score() -> None:
                     "filepath": "runbook.md",
                     "content": "rollback command",
                     "recall_score": 3.0,
+                    "source_doc_id": "doc-1",
                     "section_title": "Rollback",
                     "source_type": "md",
+                    "page_start": 2,
+                    "page_end": 3,
                 }
             ]
         ),
@@ -180,6 +183,11 @@ def test_rag_chain_generates_answer_with_high_rerank_score() -> None:
     assert response.source_count == 1
     assert response.sources[0].score_source == "rerank"
     assert response.sources[0].rerank_score == 0.8
+    assert response.sources[0].source_doc_id == "doc-1"
+    assert response.sources[0].section_title == "Rollback"
+    assert response.sources[0].source_type == "md"
+    assert response.sources[0].page_start == 2
+    assert response.sources[0].page_end == 3
     assert llm_service.calls == 1
 
 

@@ -16,7 +16,16 @@ export interface ChatRequest {
 
 export interface SourceItem {
   doc_id: string;
+  source_doc_id?: string | null;
+  chunk_id?: string | null;
+  chunk_index?: number | null;
+  filename?: string | null;
   filepath: string;
+  section_title?: string | null;
+  section_path?: string | null;
+  source_type?: string | null;
+  page_start?: number | null;
+  page_end?: number | null;
   score: number;
   rerank_score?: number | null;
   recall_score?: number | null;

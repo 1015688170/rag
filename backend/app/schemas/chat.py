@@ -43,7 +43,16 @@ class ChatRequest(BaseModel):
 
 class SourceItem(BaseModel):
     doc_id: str = Field(..., description="Chunk or document identifier")
+    source_doc_id: str | None = Field(default=None, description="Parent knowledge document identifier")
+    chunk_id: str | None = Field(default=None, description="Original chunk identifier")
+    chunk_index: int | None = Field(default=None, description="Chunk order in the source document")
+    filename: str | None = Field(default=None, description="Original source filename")
     filepath: str = Field(..., description="Original source path")
+    section_title: str | None = Field(default=None, description="Source section title")
+    section_path: str | None = Field(default=None, description="Source section path")
+    source_type: str | None = Field(default=None, description="Source document type")
+    page_start: int | None = Field(default=None, description="First source page for paged documents")
+    page_end: int | None = Field(default=None, description="Last source page for paged documents")
     score: float = Field(..., description="Primary UI score, rerank score when available")
     rerank_score: float | None = Field(default=None, description="BGE rerank score")
     recall_score: float | None = Field(default=None, description="Azure Search recall score")
