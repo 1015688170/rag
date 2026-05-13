@@ -518,3 +518,116 @@ return {
 3. `search_service.py` 返回 dict 中 `doc_id` vs `source_doc_id` 命名澄清（P2，不影响正确性）
 
 第二轮修改已达到可合并标准。
+
+---
+
+---
+
+# 第三轮审查：Codex Follow-up 验证
+
+**对比基线**: `139a73f`（第二轮报告提交）→ `c37f6a9`（Codex follow-up）  
+**变更范围**: 4 个文件，+64 / -28 行  
+
+```
+backend/app/rag/chains/rag_chain.py      |  6 ++--
+backend/app/services/search_service.py   | 51 +++++++++++++++-----------
+backend/tests/test_api_error_handling.py |  7 +++--
+backend/tests/test_search_service.py     | 28 ++++++++++++++++
+```
+
+---
+
+## 变更分析
+
+### 1. `rag_chain.py` — 修复 `**state` TypedDict 展开问题
+
+`_retrieve_step` 和 `_rerank_step` 的 return 从 `{**state, ...}` 改为显式构造每个 key。
+
+```python
+# _retrieve_step: 之前
+return {**state, "index_name": index_name, "documents": documents}
+
+# 现在
+return {
+    "request": request,
+    "index_name": index_name,
+    "documents": documents,
+}
+```
+
+```python
+# _rerank_step: 之前
+return {**state, "raw_docs": raw_docs, "reranked_docs": final_docs}
+
+# 现在
+return {
+    "request": request,
+    "index_name": state["index_name"],
+    "documents": state["documents"],
+    "raw_docs": raw_docs,
+    "reranked_docs": final_docs,
+}
+```
+
+✅ 正确修复。mypy/pyright 不再报类型错误。
+
+### 2. `search_service.py` — 提取方法 + 注释澄清命名
+
+- 将 `search()` 中内联的 row → dict 转换提取为独立方法 `_search_row_to_document()`
+- 添加注释澄清 `doc_id`（chunk key）与 `source_doc_id`（parent document ID）的区别
+
+✅ 好的重构。提取独立方法改善了可测试性，注释消除了命名混淆。
+
+### 3. `test_api_error_handling.py` — 移除 `anyio` 依赖
+
+- 移除 `@pytest.mark.anyio` 装饰器
+- `async def` → `def`
+- `await chat_route.chat(...)` → `asyncio.run(chat_route.chat(...))`
+
+✅ 无需额外依赖即可运行。`asyncio` 是标准库。
+
+### 4. `test_search_service.py` — 新增 `_search_row_to_document` 测试
+
+验证 `doc_id`（chunk key）与 `source_doc_id`（parent doc ID）正确区分：
+```python
+assert result["doc_id"] == "chunk-key-1"
+assert result["source_doc_id"] == "parent-doc-1"
+assert result["chunk_id"] == "chunk-1"
+assert result["section_title"] == "Rollback"
+assert result["source_type"] == "md"
+assert result["page_start"] == 2
+assert result["page_end"] == 3
+assert result["recall_score"] == 4.5
+```
+
+---
+
+## 第三轮结论
+
+| 第二轮遗留问题 | 状态 |
+|---|---|
+| P1 测试依赖缺失（`pytest-asyncio`） | ✅ 改用 `asyncio.run()`，零额外依赖 |
+| P2 `**state` TypedDict 展开 | ✅ 改为显式构造每个 key |
+| P2 `doc_id` vs `source_doc_id` 混淆 | ✅ 提取方法 + 注释 + 独立测试 |
+
+**三轮全部遗留问题已清零。** 无新问题，代码达到可合并标准。
+
+---
+
+## 三轮总览
+
+| 审查项 | 第一轮（基线） | 第二轮（Codex v1） | 第三轮（Codex v2） |
+|---|---|---|---|
+| `/api/chat` 兼容 | ✅ | ✅ | ✅ |
+| LangChain 侵入度 | ✅ | ✅ | ✅ |
+| Document 返回 | ✅ | ✅ | ✅ |
+| 权限过滤位置 | ✅ | ✅ | ✅ |
+| Rerank 拒答 | ✅ | ✅ | ✅ |
+| 异常泄露 | ❌ P0 | ✅ | ✅ |
+| 单元测试 | ⚠️ 3 个 | ✅ 8 个 | ✅ 9 个 |
+| Search select | ⚠️ 3 字段 | ✅ 12 字段 | ✅ 12 字段 + 方法提取 |
+| State 类型安全 | ❌ `dict` | ✅ TypedDict | ✅ 显式构造 |
+| 测试依赖 | — | ⚠️ anyio | ✅ asyncio |
+| 命名混淆 | — | ⚠️ doc_id | ✅ 注释 + 测试 |
+
+**最终评定：三轮审查后全部问题已解决，代码质量达到公司级 RAG 平台标准。**
