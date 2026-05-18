@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,8 +14,18 @@ class ChatModel(str, Enum):
     claude_opus_45 = "claude-opus-4.5"
 
 
+class ChatHistoryItem(BaseModel):
+    role: Literal["user", "assistant"] = Field(..., description="Conversation message role")
+    content: str = Field(..., min_length=1, max_length=4000, description="Conversation message content")
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000, description="User input question")
+    history: list[ChatHistoryItem] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Recent conversation messages used only for follow-up question context",
+    )
     user_id: str | None = Field(default=None, description="Current user id for document permission filtering")
     department: str | None = Field(default=None, description="Current user department for document permission filtering")
     roles: list[str] = Field(default_factory=list, description="Current user roles for document permission filtering")

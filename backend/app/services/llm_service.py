@@ -6,7 +6,7 @@ from typing import Any, Optional
 import requests
 
 from app.core.config import Settings
-from app.schemas.chat import ChatModel
+from app.schemas.chat import ChatHistoryItem, ChatModel
 
 
 SYSTEM_PROMPT = """你是企业内部运维知识库的 RAG 问答助手，主要服务对象是运维新人、实习生和一线值班同学。
@@ -55,6 +55,7 @@ class LLMService:
         context_chunks: list[dict[str, Any]],
         chat_model: ChatModel,
         prompt_template: str | None = None,
+        history: list[ChatHistoryItem] | None = None,
     ) -> str:
         system_prompt = prompt_template.strip() if prompt_template and prompt_template.strip() else SYSTEM_PROMPT
         context_text = "\n\n".join(
@@ -63,24 +64,29 @@ class LLMService:
                 for doc in context_chunks
             ]
         )
+        history_text = self._format_history(history or [])
         if chat_model == ChatModel.gpt_4o:
-            return self._generate_with_gpt(user_question, context_text, system_prompt)
+            return self._generate_with_gpt(user_question, context_text, system_prompt, history_text)
         if chat_model == ChatModel.claude_opus_45:
-            return self._generate_with_claude(user_question, context_text, system_prompt)
+            return self._generate_with_claude(user_question, context_text, system_prompt, history_text)
         raise ValueError(f"Unsupported chat model: {chat_model}")
 
-    def _generate_with_gpt(self, user_question: str, context_text: str, system_prompt: str) -> str:
+    def _generate_with_gpt(
+        self,
+        user_question: str,
+        context_text: str,
+        system_prompt: str,
+        history_text: str,
+    ) -> str:
         headers = {
             "Content-Type": "application/json",
             "api-key": self.settings.nexus_api_key,
         }
+        user_content = self._build_user_prompt(user_question, context_text, history_text)
         payload = {
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": f"【参考资料】:\n{context_text}\n\n【问题】: {user_question}",
-                },
+                {"role": "user", "content": user_content},
             ],
             "temperature": 0.2,
             "max_tokens": 800,
@@ -95,14 +101,36 @@ class LLMService:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
-    def _generate_with_claude(self, user_question: str, context_text: str, system_prompt: str) -> str:
+    def _generate_with_claude(
+        self,
+        user_question: str,
+        context_text: str,
+        system_prompt: str,
+        history_text: str,
+    ) -> str:
         client = self._get_claude_client()
-        combined_prompt = f"{system_prompt}\n\n【参考资料】:\n{context_text}\n\n【问题】: {user_question}"
+        combined_prompt = f"{system_prompt}\n\n{self._build_user_prompt(user_question, context_text, history_text)}"
         response = client.converse(
             modelId=self.settings.claude_model_id,
             messages=[{"role": "user", "content": [{"text": combined_prompt}]}],
         )
         return response["output"]["message"]["content"][0]["text"]
+
+    def _build_user_prompt(self, user_question: str, context_text: str, history_text: str) -> str:
+        history_block = (
+            f"\n\n[Conversation history - context only, not evidence]\n{history_text}"
+            if history_text
+            else ""
+        )
+        return f"[Reference material]\n{context_text}{history_block}\n\n[Current question]\n{user_question}"
+
+    def _format_history(self, history: list[ChatHistoryItem]) -> str:
+        lines = []
+        for item in history[-10:]:
+            content = " ".join(item.content.split())
+            if content:
+                lines.append(f"{item.role}: {content[:1000]}")
+        return "\n".join(lines)
 
     def _get_claude_client(self) -> Any:
         if self._claude_client is not None:

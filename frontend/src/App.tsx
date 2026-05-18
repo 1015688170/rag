@@ -6,7 +6,7 @@ import { MessageBubble } from "./components/MessageBubble";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { createId } from "./lib/id";
 import { createSearchIndex, fetchCurrentUser, fetchIndexes, login, logout, sendChatMessage } from "./lib/api";
-import type { ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
+import type { ChatHistoryItem, ChatMessage, ChatModel, EmbeddingModel } from "./types/chat";
 
 const initialMessages: ChatMessage[] = [];
 
@@ -63,6 +63,17 @@ function parseRoles(text: string): string[] {
     .split(",")
     .map((role) => role.trim())
     .filter(Boolean);
+}
+
+function buildChatHistory(messages: ChatMessage[]): ChatHistoryItem[] {
+  return messages
+    .filter((message) => (message.role === "user" || message.role === "assistant") && !message.isError)
+    .map((message) => ({
+      role: message.role as ChatHistoryItem["role"],
+      content: message.content.trim(),
+    }))
+    .filter((message) => message.content)
+    .slice(-10);
 }
 
 function LoginPage({
@@ -305,6 +316,7 @@ function App() {
     if (!question || isLoading) {
       return;
     }
+    const history = buildChatHistory(messages);
 
     const userMessage: ChatMessage = {
       id: createId(),
@@ -320,6 +332,7 @@ function App() {
     try {
       const response = await sendChatMessage({
         question,
+        history,
         index_name: selectedIndex || undefined,
         embedding_model: embeddingModel,
         chat_model: chatModel,

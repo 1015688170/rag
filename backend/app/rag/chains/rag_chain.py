@@ -18,9 +18,14 @@ if TYPE_CHECKING:
 class RagState(TypedDict, total=False):
     request: ChatRequest
     index_name: str
+    retrieval_query: str
     documents: list[Document]
     raw_docs: list[dict[str, Any]]
     reranked_docs: list[dict[str, Any]]
+
+
+MAX_CONTEXT_HISTORY_MESSAGES = 6
+MAX_CONTEXT_QUERY_CHARS = 3000
 
 
 NO_RETRIEVAL_ANSWER = "抱歉，当前知识库中未检索到相关片段，无法生成可信回答。"
@@ -60,8 +65,9 @@ class RagChain:
     def _retrieve_step(self, state: RagState) -> RagState:
         request: ChatRequest = state["request"]
         index_name = self.retriever.resolve_index_name(request.embedding_model, request.index_name)
+        retrieval_query = self._build_contextual_query(request)
         documents = self.retriever.retrieve(
-            query_text=request.question,
+            query_text=retrieval_query,
             embedding_model=request.embedding_model,
             index_name=index_name,
             top_k=request.top_k,
@@ -72,15 +78,17 @@ class RagChain:
         return {
             "request": request,
             "index_name": index_name,
+            "retrieval_query": retrieval_query,
             "documents": documents,
         }
 
     def _rerank_step(self, state: RagState) -> RagState:
         request: ChatRequest = state["request"]
+        retrieval_query: str = state["retrieval_query"]
         raw_docs = [self._document_to_source_doc(document) for document in state["documents"]]
         try:
             final_docs = self.rerank_service.rerank(
-                query=request.question,
+                query=retrieval_query,
                 docs=raw_docs,
                 top_n=request.top_n,
             )
@@ -89,6 +97,7 @@ class RagChain:
         return {
             "request": request,
             "index_name": state["index_name"],
+            "retrieval_query": retrieval_query,
             "documents": state["documents"],
             "raw_docs": raw_docs,
             "reranked_docs": final_docs,
@@ -129,6 +138,7 @@ class RagChain:
             context_chunks=final_docs,
             chat_model=request.chat_model,
             prompt_template=request.prompt_template,
+            history=request.history,
         )
         sources = [SourceItem(**doc) for doc in final_docs]
         return ChatResponse(
@@ -145,6 +155,26 @@ class RagChain:
             **document.metadata,
             "content": document.page_content,
         }
+
+    def _build_contextual_query(self, request: ChatRequest) -> str:
+        if not request.history:
+            return request.question
+
+        history_lines = []
+        for item in request.history[-MAX_CONTEXT_HISTORY_MESSAGES:]:
+            content = " ".join(item.content.split())
+            if content:
+                history_lines.append(f"{item.role}: {content}")
+
+        if not history_lines:
+            return request.question
+
+        contextual_query = (
+            "Conversation history for resolving references only:\n"
+            f"{chr(10).join(history_lines)}\n\n"
+            f"Current question:\n{request.question}"
+        )
+        return contextual_query[-MAX_CONTEXT_QUERY_CHARS:]
 
     def _fallback_to_recall_docs(self, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
         fallback_docs: list[dict[str, Any]] = []

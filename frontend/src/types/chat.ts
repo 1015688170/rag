@@ -1,8 +1,14 @@
 export type EmbeddingModel = "ada-002" | "google-005";
 export type ChatModel = "gpt-4o" | "claude-opus-4.5";
 
+export interface ChatHistoryItem {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface ChatRequest {
   question: string;
+  history?: ChatHistoryItem[];
   user_id?: string;
   department?: string;
   roles?: string[];

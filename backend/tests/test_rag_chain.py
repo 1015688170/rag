@@ -17,12 +17,14 @@ class FakeEmbeddingService:
 class FakeSearchService:
     def __init__(self, rows: list[dict] | None = None) -> None:
         self.rows = rows or []
+        self.last_query_text = None
         self.last_query_vector = None
 
     def resolve_index_name(self, embedding_model: EmbeddingModel, index_name: str | None = None) -> str:
         return index_name or "default-index"
 
     def search(self, **kwargs) -> list[dict]:
+        self.last_query_text = kwargs["query_text"]
         self.last_query_vector = kwargs["query_vector"]
         return self.rows
 
@@ -30,9 +32,11 @@ class FakeSearchService:
 class FakeRerankService:
     def __init__(self, docs: list[dict] | None = None, min_score: float = 0.0) -> None:
         self.docs = docs
+        self.last_query = None
         self.settings = SimpleNamespace(min_rerank_score=min_score)
 
     def rerank(self, query: str, docs: list[dict], top_n: int = 5) -> list[dict]:
+        self.last_query = query
         if self.docs is not None:
             return self.docs[:top_n]
         ranked = []
@@ -57,6 +61,7 @@ class FailingRerankService(FakeRerankService):
 class FakeLLMService:
     def __init__(self) -> None:
         self.calls = 0
+        self.last_history = None
 
     def generate(
         self,
@@ -64,8 +69,10 @@ class FakeLLMService:
         context_chunks: list[dict],
         chat_model: ChatModel,
         prompt_template: str | None = None,
+        history: list | None = None,
     ) -> str:
         self.calls += 1
+        self.last_history = history
         return f"answer from {len(context_chunks)} chunks"
 
 
@@ -189,6 +196,45 @@ def test_rag_chain_generates_answer_with_high_rerank_score() -> None:
     assert response.sources[0].page_start == 2
     assert response.sources[0].page_end == 3
     assert llm_service.calls == 1
+
+
+def test_rag_chain_uses_history_for_follow_up_context() -> None:
+    search_service = FakeSearchService(
+        rows=[
+            {
+                "doc_id": "chunk-1",
+                "filepath": "runbook.md",
+                "content": "pod oom handling steps",
+                "recall_score": 3.0,
+            }
+        ]
+    )
+    rerank_service = FakeRerankService(min_score=0.5)
+    llm_service = FakeLLMService()
+    chain = RagChain(
+        embedding_service=FakeEmbeddingService(),
+        search_service=search_service,
+        rerank_service=rerank_service,
+        llm_service=llm_service,
+    )
+
+    response = chain.invoke(
+        ChatRequest(
+            question="how should I handle it",
+            index_name="ops-index",
+            history=[
+                {"role": "user", "content": "How do I confirm Kubernetes Pod OOM?"},
+                {"role": "assistant", "content": "Check the pod status and restart reason."},
+            ],
+        )
+    )
+
+    assert response.answer == "answer from 1 chunks"
+    assert "Kubernetes Pod OOM" in search_service.last_query_text
+    assert "how should I handle it" in search_service.last_query_text
+    assert rerank_service.last_query == search_service.last_query_text
+    assert llm_service.last_history is not None
+    assert llm_service.last_history[0].content == "How do I confirm Kubernetes Pod OOM?"
 
 
 def test_rag_chain_falls_back_to_recall_when_rerank_raises() -> None:
