@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +21,22 @@ AUTH_WHITELIST = {
 }
 
 
+def configure_app_logging() -> None:
+    app_logger = logging.getLogger("app")
+    app_logger.setLevel(logging.INFO)
+
+    if not app_logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+        )
+        app_logger.addHandler(handler)
+
+    app_logger.propagate = False
+
+
 def create_application() -> FastAPI:
+    configure_app_logging()
     init_db()
     app = FastAPI(
         title=settings.app_name,
