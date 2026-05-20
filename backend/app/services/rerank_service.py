@@ -123,6 +123,25 @@ class RerankService:
 
         return status
 
+    def warm_up(self) -> dict[str, Any]:
+        started_at = perf_counter()
+        try:
+            self._get_reranker()
+            self._last_error = None
+            elapsed = perf_counter() - started_at
+            logger.info("rag.reranker_warmup elapsed=%.3fs ready=true", elapsed)
+            return {"ready": True, "elapsed_seconds": elapsed, "last_error": None}
+        except Exception as exc:
+            self._last_error = f"{type(exc).__name__}: {exc}"
+            elapsed = perf_counter() - started_at
+            logger.exception("Reranker warmup failed.")
+            logger.info(
+                "rag.reranker_warmup elapsed=%.3fs ready=false error=%s",
+                elapsed,
+                self._last_error,
+            )
+            return {"ready": False, "elapsed_seconds": elapsed, "last_error": self._last_error}
+
     def _get_reranker(self) -> Any:
         if self._reranker is not None:
             return self._reranker

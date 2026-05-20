@@ -30,6 +30,10 @@ document_ingest_service = DocumentIngestService(
 )
 
 
+def warm_up_reranker() -> None:
+    chat_service.rerank_service.warm_up()
+
+
 @router.post("/chat", response_model=ChatResponse, summary="RAG chat entrypoint")
 async def chat(request: ChatRequest) -> ChatResponse:
     try:

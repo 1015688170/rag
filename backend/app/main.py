@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.auth import router as auth_router
-from app.api.routes.chat import router as chat_router
+from app.api.routes.chat import router as chat_router, warm_up_reranker
 from app.api.routes.documents import router as documents_router
 from app.api.routes.search_index import router as search_index_router
 from app.core.auth import SESSION_COOKIE_NAME, AuthError, validate_session_token
@@ -69,6 +69,10 @@ def create_application() -> FastAPI:
     @app.get("/health", tags=["system"])
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.on_event("startup")
+    async def startup_warmup() -> None:
+        warm_up_reranker()
 
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(chat_router, prefix=settings.api_prefix)
