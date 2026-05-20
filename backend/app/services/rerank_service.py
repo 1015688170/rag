@@ -4,6 +4,7 @@ import logging
 import os
 import warnings
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Optional
 
 from app.core.config import Settings
@@ -21,6 +22,8 @@ class RerankService:
         if not docs:
             return []
 
+        started_at = perf_counter()
+        was_loaded = self._reranker is not None
         try:
             reranker = self._get_reranker()
             pairs = [[query, doc["content"]] for doc in docs]
@@ -48,7 +51,16 @@ class RerankService:
                 )
 
             ranked_docs.sort(key=lambda item: item["score"], reverse=True)
-            return ranked_docs[:top_n]
+            final_docs = ranked_docs[:top_n]
+            logger.info(
+                "rag.reranker elapsed=%.3fs input_docs=%s output_docs=%s input_chars=%s loaded_before=%s",
+                perf_counter() - started_at,
+                len(docs),
+                len(final_docs),
+                sum(len(str(doc.get("content", ""))) for doc in docs),
+                was_loaded,
+            )
+            return final_docs
         except Exception as exc:
             # If the local reranker stack (FlagEmbedding/transformers/torch) is mis-installed
             # or incompatible, degrade gracefully by skipping rerank.
@@ -65,6 +77,13 @@ class RerankService:
                         "preview": self._build_preview(doc.get("content", "")),
                     }
                 )
+            logger.info(
+                "rag.reranker elapsed=%.3fs fallback=true input_docs=%s output_docs=%s loaded_before=%s",
+                perf_counter() - started_at,
+                len(docs),
+                len(fallback),
+                was_loaded,
+            )
             return fallback
 
     def _fallback_score(self, doc: dict[str, Any]) -> float:

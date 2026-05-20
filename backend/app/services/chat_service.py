@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from starlette.concurrency import run_in_threadpool
+
 from app.rag.chains.rag_chain import RagChain
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.embedding_service import EmbeddingService
@@ -28,4 +30,4 @@ class ChatService:
         )
 
     async def chat(self, request: ChatRequest) -> ChatResponse:
-        return self.rag_chain.invoke(request)
+        return await run_in_threadpool(self.rag_chain.invoke, request)

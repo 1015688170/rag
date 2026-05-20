@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
 from typing import Any
 import re
 
 from app.core.config import Settings
 from app.schemas.chat import EmbeddingModel
 
+logger = logging.getLogger(__name__)
+
 
 class SearchService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._search_clients: dict[str, Any] = {}
 
     def list_indexes(self) -> list[str]:
         from azure.core.credentials import AzureKeyCredential
@@ -146,14 +151,7 @@ class SearchService:
         return any(marker in error_code or marker in message for marker in exists_markers)
 
     def upload_documents(self, index_name: str, documents: list[dict[str, Any]]) -> int:
-        from azure.core.credentials import AzureKeyCredential
-        from azure.search.documents import SearchClient
-
-        client = SearchClient(
-            endpoint=self.settings.search_endpoint,
-            index_name=self.resolve_index_name(EmbeddingModel.ada_002, index_name),
-            credential=AzureKeyCredential(self.settings.search_key),
-        )
+        client = self._get_search_client(self.resolve_index_name(EmbeddingModel.ada_002, index_name))
         results = client.merge_or_upload_documents(documents=documents)
         return sum(1 for result in results if result.succeeded)
 
@@ -164,14 +162,7 @@ class SearchService:
         return uploaded_count
 
     def delete_chunks_by_doc_id(self, index_name: str, doc_id: str) -> int:
-        from azure.core.credentials import AzureKeyCredential
-        from azure.search.documents import SearchClient
-
-        client = SearchClient(
-            endpoint=self.settings.search_endpoint,
-            index_name=self.resolve_index_name(EmbeddingModel.ada_002, index_name),
-            credential=AzureKeyCredential(self.settings.search_key),
-        )
+        client = self._get_search_client(self.resolve_index_name(EmbeddingModel.ada_002, index_name))
         escaped_doc_id = doc_id.replace("'", "''")
         results = client.search(
             search_text="*",
@@ -195,14 +186,7 @@ class SearchService:
         allowed_departments: list[str],
         allowed_roles: list[str],
     ) -> int:
-        from azure.core.credentials import AzureKeyCredential
-        from azure.search.documents import SearchClient
-
-        client = SearchClient(
-            endpoint=self.settings.search_endpoint,
-            index_name=self.resolve_index_name(EmbeddingModel.ada_002, index_name),
-            credential=AzureKeyCredential(self.settings.search_key),
-        )
+        client = self._get_search_client(self.resolve_index_name(EmbeddingModel.ada_002, index_name))
         escaped_doc_id = doc_id.replace("'", "''")
         results = client.search(
             search_text="*",
@@ -237,17 +221,12 @@ class SearchService:
         department: str | None = None,
         roles: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        from azure.core.credentials import AzureKeyCredential
-        from azure.search.documents import SearchClient
+        started_at = perf_counter()
         from azure.search.documents.models import VectorizedQuery
 
         index_name = self.resolve_index_name(embedding_model, index_name)
 
-        client = SearchClient(
-            endpoint=self.settings.search_endpoint,
-            index_name=index_name,
-            credential=AzureKeyCredential(self.settings.search_key),
-        )
+        client = self._get_search_client(index_name)
         vector_query = VectorizedQuery(
             vector=query_vector,
             k_nearest_neighbors=top_k,
@@ -277,7 +256,31 @@ class SearchService:
         documents: list[dict[str, Any]] = []
         for row in results:
             documents.append(self._search_row_to_document(row))
+        logger.info(
+            "rag.search elapsed=%.3fs index=%s top_k=%s docs=%s query_chars=%s",
+            perf_counter() - started_at,
+            index_name,
+            top_k,
+            len(documents),
+            len(query_text),
+        )
         return documents
+
+    def _get_search_client(self, index_name: str) -> Any:
+        client = self._search_clients.get(index_name)
+        if client is not None:
+            return client
+
+        from azure.core.credentials import AzureKeyCredential
+        from azure.search.documents import SearchClient
+
+        client = SearchClient(
+            endpoint=self.settings.search_endpoint,
+            index_name=index_name,
+            credential=AzureKeyCredential(self.settings.search_key),
+        )
+        self._search_clients[index_name] = client
+        return client
 
     def _search_row_to_document(self, row: Any) -> dict[str, Any]:
         recall_score = row.get("@search.score")

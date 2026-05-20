@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from langchain_core.documents import Document
@@ -13,6 +15,8 @@ if TYPE_CHECKING:
     from app.services.llm_service import LLMService
     from app.services.rerank_service import RerankService
     from app.services.search_service import SearchService
+
+logger = logging.getLogger(__name__)
 
 
 class RagState(TypedDict, total=False):
@@ -60,9 +64,22 @@ class RagChain:
         )
 
     def invoke(self, request: ChatRequest) -> ChatResponse:
-        return self.chain.invoke({"request": request})
+        started_at = perf_counter()
+        try:
+            return self.chain.invoke({"request": request})
+        finally:
+            logger.info(
+                "rag.total elapsed=%.3fs chat_model=%s embedding_model=%s top_k=%s top_n=%s history=%s",
+                perf_counter() - started_at,
+                request.chat_model,
+                request.embedding_model,
+                request.top_k,
+                request.top_n,
+                len(request.history),
+            )
 
     def _retrieve_step(self, state: RagState) -> RagState:
+        started_at = perf_counter()
         request: ChatRequest = state["request"]
         index_name = self.retriever.resolve_index_name(request.embedding_model, request.index_name)
         retrieval_query = self._build_contextual_query(request)
@@ -75,6 +92,13 @@ class RagChain:
             department=request.department,
             roles=request.roles,
         )
+        logger.info(
+            "rag.retrieve elapsed=%.3fs index=%s query_chars=%s docs=%s",
+            perf_counter() - started_at,
+            index_name,
+            len(retrieval_query),
+            len(documents),
+        )
         return {
             "request": request,
             "index_name": index_name,
@@ -83,6 +107,7 @@ class RagChain:
         }
 
     def _rerank_step(self, state: RagState) -> RagState:
+        started_at = perf_counter()
         request: ChatRequest = state["request"]
         retrieval_query: str = state["retrieval_query"]
         raw_docs = [self._document_to_source_doc(document) for document in state["documents"]]
@@ -94,6 +119,13 @@ class RagChain:
             )
         except Exception:
             final_docs = self._fallback_to_recall_docs(raw_docs, request.top_n)
+        logger.info(
+            "rag.rerank elapsed=%.3fs input_docs=%s output_docs=%s input_chars=%s",
+            perf_counter() - started_at,
+            len(raw_docs),
+            len(final_docs),
+            sum(len(str(doc.get("content", ""))) for doc in raw_docs),
+        )
         return {
             "request": request,
             "index_name": state["index_name"],
@@ -104,11 +136,13 @@ class RagChain:
         }
 
     def _answer_step(self, state: RagState) -> ChatResponse:
+        started_at = perf_counter()
         request: ChatRequest = state["request"]
         index_name: str = state["index_name"]
         reranked_docs: list[dict[str, Any]] = state["reranked_docs"]
 
         if not reranked_docs:
+            logger.info("rag.answer elapsed=%.3fs skipped=no_retrieval", perf_counter() - started_at)
             return ChatResponse(
                 answer=NO_RETRIEVAL_ANSWER,
                 model=request.chat_model,
@@ -122,6 +156,11 @@ class RagChain:
         final_docs = self._filter_docs_by_rerank_score(reranked_docs)
         if not final_docs:
             sources = [SourceItem(**doc) for doc in rejected_docs]
+            logger.info(
+                "rag.answer elapsed=%.3fs skipped=low_relevance rejected_docs=%s",
+                perf_counter() - started_at,
+                len(rejected_docs),
+            )
             return ChatResponse(
                 answer=LOW_RELEVANCE_ANSWER_TEMPLATE.format(
                     threshold=self.rerank_service.settings.min_rerank_score,
@@ -139,6 +178,12 @@ class RagChain:
             chat_model=request.chat_model,
             prompt_template=request.prompt_template,
             history=request.history,
+        )
+        logger.info(
+            "rag.answer elapsed=%.3fs generated_docs=%s context_chars=%s",
+            perf_counter() - started_at,
+            len(final_docs),
+            sum(len(str(doc.get("content", ""))) for doc in final_docs),
         )
         sources = [SourceItem(**doc) for doc in final_docs]
         return ChatResponse(

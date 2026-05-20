@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
+from time import perf_counter
 from typing import Any, Optional
 
 import requests
 
 from app.core.config import Settings
 from app.schemas.chat import ChatHistoryItem, ChatModel
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """你是企业内部运维知识库的 RAG 问答助手，主要服务对象是运维新人、实习生和一线值班同学。
@@ -47,6 +51,7 @@ SYSTEM_PROMPT = """你是企业内部运维知识库的 RAG 问答助手，主�
 class LLMService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._gpt_session = requests.Session()
         self._claude_client: Optional[Any] = None
 
     def generate(
@@ -57,6 +62,7 @@ class LLMService:
         prompt_template: str | None = None,
         history: list[ChatHistoryItem] | None = None,
     ) -> str:
+        started_at = perf_counter()
         system_prompt = prompt_template.strip() if prompt_template and prompt_template.strip() else SYSTEM_PROMPT
         context_text = "\n\n".join(
             [
@@ -65,11 +71,21 @@ class LLMService:
             ]
         )
         history_text = self._format_history(history or [])
-        if chat_model == ChatModel.gpt_4o:
-            return self._generate_with_gpt(user_question, context_text, system_prompt, history_text)
-        if chat_model == ChatModel.claude_opus_45:
-            return self._generate_with_claude(user_question, context_text, system_prompt, history_text)
-        raise ValueError(f"Unsupported chat model: {chat_model}")
+        try:
+            if chat_model == ChatModel.gpt_4o:
+                return self._generate_with_gpt(user_question, context_text, system_prompt, history_text)
+            if chat_model == ChatModel.claude_opus_45:
+                return self._generate_with_claude(user_question, context_text, system_prompt, history_text)
+            raise ValueError(f"Unsupported chat model: {chat_model}")
+        finally:
+            logger.info(
+                "rag.llm elapsed=%.3fs model=%s context_chars=%s history_chars=%s system_prompt_chars=%s",
+                perf_counter() - started_at,
+                chat_model,
+                len(context_text),
+                len(history_text),
+                len(system_prompt),
+            )
 
     def _generate_with_gpt(
         self,
@@ -91,7 +107,7 @@ class LLMService:
             "temperature": 0.2,
             "max_tokens": 800,
         }
-        response = requests.post(
+        response = self._gpt_session.post(
             self.settings.gpt4o_api_url,
             json=payload,
             headers=headers,
